@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Cached price data (large, regenerated on run)
+.cache/
+
+# Logs
+*.log
+
+# Freebuff agent state
+.freebuff/
