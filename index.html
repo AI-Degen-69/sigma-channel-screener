@@ -476,17 +476,17 @@ pre.prompt-block {
       <span class="tool-count" id="count"></span>
     </div>
     <div class="table-scroll">
-      <table>
+      <table aria-label="σ-channel screener results">
         <thead><tr>
-          <th data-k="ticker">Ticker<span class="sort-arrow"></span></th>
-          <th data-k="price">Price<span class="sort-arrow"></span></th>
-          <th data-k="pos">σ Pos<span class="sort-arrow"></span></th>
-          <th data-k="buy">Buy Line<span class="sort-arrow"></span></th>
-          <th data-k="slope">Slope<span class="sort-arrow"></span></th>
-          <th data-k="mcap">MCap<span class="sort-arrow"></span></th>
-          <th data-k="pe">P/E<span class="sort-arrow"></span></th>
-          <th data-k="off52w">Off 52w<span class="sort-arrow"></span></th>
-          <th data-k="signal">Signal<span class="sort-arrow"></span></th>
+          <th scope="col" data-k="ticker">Ticker<span class="sort-arrow"></span></th>
+          <th scope="col" data-k="price">Price<span class="sort-arrow"></span></th>
+          <th scope="col" data-k="pos">σ Pos<span class="sort-arrow"></span></th>
+          <th scope="col" data-k="buy">Buy Line<span class="sort-arrow"></span></th>
+          <th scope="col" data-k="slope">Slope<span class="sort-arrow"></span></th>
+          <th scope="col" data-k="mcap">MCap<span class="sort-arrow"></span></th>
+          <th scope="col" data-k="pe">P/E<span class="sort-arrow"></span></th>
+          <th scope="col" data-k="off52w">Off 52w<span class="sort-arrow"></span></th>
+          <th scope="col" data-k="signal">Signal<span class="sort-arrow"></span></th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table>
@@ -563,7 +563,9 @@ pre.prompt-block {
 /* ═══════════════════════════════════════════════════
    STATE
    ═══════════════════════════════════════════════════ */
-const STIER = new Set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","BRK-B","AVGO","TSLA","JPM"]);
+// S-tier is authored by the screener: monthly_screener.py sets k=3 for its SIER_TOP10 and k=4
+// (or null, no channel yet) otherwise. Do not hand-list tickers here — a second list drifts.
+const isSTier = r => r.k === 3;
 let DATA = null, SEL = null, MODE = "all", Q = "", SIG = "", SLOPE = "";
 let SORT = { k: "pos", dir: 1 }, VMODE = "line";
 const $ = id => document.getElementById(id);
@@ -576,13 +578,18 @@ function tvSymbol(t) {
   const nyse = new Set(["JPM","XOM","JNJ","UNH","MCD","CRM","MRK","ABBV","KO","WMT","HD","DIS","NKE","CAT","GE","BA","GS","MS","V","MA","IBM","ORCL","LLY"]);
   return (nyse.has(t) ? "NYSE:" : "NASDAQ:") + t;
 }
-function verdict(r) {
+// One parser for the note prefix, so the stats bar, the filter, the sort and the pill can
+// never disagree about which bucket a row is in.
+function cat(r) {
   const n = r.note || "";
-  if (n.startsWith("ACTION")) return ["ACTION", "action"];
-  if (n.startsWith("WATCH"))  return ["WATCH", "watch"];
-  if (n.startsWith("SKIP"))   return ["SKIP", "skip"];
-  if (n.startsWith("hold"))   return ["HOLD", "hold"];
-  return ["—", "hold"];
+  if (n.startsWith("ACTION")) return "ACTION";
+  if (n.startsWith("WATCH"))  return "WATCH";
+  if (n.startsWith("SKIP"))   return "SKIP";
+  return "HOLD";
+}
+function verdict(r) {
+  const c = cat(r);
+  return [c, c.toLowerCase()];
 }
 function money(v) { return v ? "$" + Math.round(v / 1e9) + "B" : "n/a"; }
 
@@ -609,13 +616,7 @@ function slopeClass(r) {
   if (r.pos === undefined) return "";
   return r.slope_up ? "c-green" : "c-red";
 }
-function sigRank(r) {
-  const n = r.note || "";
-  if (n.startsWith("ACTION")) return 0;
-  if (n.startsWith("WATCH"))  return 1;
-  if (n.startsWith("hold"))   return 2;
-  return 3;
-}
+function sigRank(r) { return { ACTION: 0, WATCH: 1, HOLD: 2, SKIP: 3 }[cat(r)]; }
 function buyVal(r) { return r.pos === undefined ? null : (r.k === 3 ? r.low3 : r.low4); }
 function cellVal(r, k) {
   switch (k) {
@@ -656,10 +657,10 @@ async function load() {
   let nAction = 0, nWatch = 0, nHold = 0, nSkip = 0;
   let mostUnder = null;
   for (const r of rows) {
-    const n = r.note || "";
-    if (n.startsWith("ACTION")) nAction++;
-    else if (n.startsWith("WATCH")) nWatch++;
-    else if (n.startsWith("SKIP")) nSkip++;
+    const c = cat(r);
+    if (c === "ACTION") nAction++;
+    else if (c === "WATCH") nWatch++;
+    else if (c === "SKIP") nSkip++;
     else nHold++;
     if (r.pos !== undefined && (mostUnder === null || r.pos < mostUnder.pos)) mostUnder = r;
   }
@@ -684,12 +685,10 @@ async function load() {
    ═══════════════════════════════════════════════════ */
 function filtered() {
   const rows = DATA.rows.filter(r => {
-    if (MODE === "sig" && !/^(ACTION|WATCH)/.test(r.note || "")) return false;
-    if (MODE === "tier" && !STIER.has(r.ticker)) return false;
-    if (SIG === "ACTION" && !/^ACTION/.test(r.note || "")) return false;
-    if (SIG === "WATCH" && !/^WATCH/.test(r.note || "")) return false;
-    if (SIG === "hold" && !/^hold/.test(r.note || "")) return false;
-    if (SIG === "SKIP" && !/^SKIP/.test(r.note || "")) return false;
+    const c = cat(r);
+    if (MODE === "sig" && c !== "ACTION" && c !== "WATCH") return false;
+    if (MODE === "tier" && !isSTier(r)) return false;
+    if (SIG && SIG.toUpperCase() !== c) return false;
     if (SLOPE === "up" && !(r.pos !== undefined && r.slope_up)) return false;
     if (SLOPE === "down" && !(r.pos !== undefined && !r.slope_up)) return false;
     if (Q && !(r.ticker.includes(Q) || (r.note || "").toUpperCase().includes(Q))) return false;
@@ -717,8 +716,8 @@ function paint() {
     const tr = document.createElement("tr");
     if (r.ticker === SEL) tr.className = "selected";
     tr.tabIndex = 0;
-    tr.setAttribute("aria-selected", r.ticker === SEL ? "true" : "false");
-    const tierDot = STIER.has(r.ticker) ? '<span class="tier-badge" title="S-tier"></span>' : '';
+    if (r.ticker === SEL) tr.setAttribute("aria-current", "true");
+    const tierDot = isSTier(r) ? '<span class="tier-badge" title="S-tier"></span>' : '';
     tr.innerHTML =
       `<td class="ticker-cell">${tierDot}<span>${r.ticker}</span></td>` +
       `<td>${r.price.toFixed(2)}</td>` +
@@ -749,7 +748,7 @@ function paint() {
    DETAIL SELECTION
    ═══════════════════════════════════════════════════ */
 function promptFor(r) {
-  return `Fundamental check for ${r.ticker} at $${r.price.toFixed(2)} (${r.pos >= 0 ? "+" : ""}${r.pos.toFixed(2)} σ below trend). ` +
+  return `Fundamental check for ${r.ticker} at $${r.price.toFixed(2)} (${r.pos >= 0 ? "+" : ""}${r.pos.toFixed(2)} σ vs the regression mid-line). ` +
     `With web search on, answer ONLY: (1) TEMPORARY recoverable dip or PERMANENT damage? Cite the cause + 2-3 recent sources. ` +
     `(2) Bankruptcy/severe distress risk in 12-24 months? Cover debt, interest coverage, FCF, maturities, dividend. ` +
     `End with GREEN LIGHT or RED LIGHT + one paragraph of reasoning.`;
@@ -769,10 +768,10 @@ function select(t) {
   $("dDate").textContent = r.date;
   const tierEl = $("dTier");
   tierEl.style.display = "inline";
-  tierEl.classList.toggle("standard", !(hasPos && STIER.has(t)));
+  tierEl.classList.toggle("standard", !(hasPos && isSTier(r)));
   tierEl.textContent = !hasPos
     ? "No 2500-day channel yet"
-    : (STIER.has(t) ? "S-tier · −" : "Standard · −") + r.k + "σ line";
+    : (isSTier(r) ? "S-tier · −" : "Standard · −") + r.k + "σ line";
 
   const up = hasPos ? r.mid / r.price - 1 : null;
   const upCls = up === null ? "" : (up >= 0.3 ? "c-green" : (up < 0 ? "c-red" : ""));
