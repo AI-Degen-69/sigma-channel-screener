@@ -340,6 +340,11 @@ td.ticker-cell .tier-badge {
 .chart-toggle .tool-btn { font-size: 11px; padding: 3px 8px; }
 
 .chart-wrap { position: relative; }
+.chart-readout {
+  margin-top: var(--space-sm); min-height: 18px;
+  font: 11.5px/1.5 var(--mono); color: var(--text-secondary);
+}
+.chart-readout b { color: var(--text); font-weight: 600; }
 canvas#band {
   width: 100%; height: 300px;
   background: var(--bg-raised); border: 1px solid var(--border);
@@ -537,9 +542,12 @@ pre.prompt-block {
           </div>
         </div>
         <div class="chart-wrap" id="bandWrap">
-          <canvas id="band" width="900" height="300" role="img" aria-label="Price versus the σ-channel bands for the selected ticker"></canvas>
+          <canvas id="band" width="900" height="300" tabindex="0" role="img"
+            aria-label="Price versus the σ-channel bands for the selected ticker"
+            aria-describedby="chartReadout"></canvas>
           <div id="tip"></div>
         </div>
+        <div class="chart-readout" id="chartReadout" aria-live="polite"></div>
       </div>
       <!-- tradingview -->
       <div class="tv-section">
@@ -820,6 +828,9 @@ function select(t) {
     ? promptFor(r)
     : "Not enough price history for a σ-channel yet (" + r.bars + " bars, 2500 needed), so there is no fundamental prompt to run.";
 
+  KEYIDX = -1;
+  $("chartReadout").textContent = "";
+
   $("tvStatus").textContent = "loading " + t + "…";
   $("tv").src = "https://s.tradingview.com/widgetembed/?symbol=" + encodeURIComponent(tvSymbol(t)) +
     "&interval=D&theme=dark&style=1&withdateranges=1&hide_side_toolbar=0&allow_symbol_change=1";
@@ -840,6 +851,38 @@ function sdAt(D, i) {
   return s > 0 ? s : null;
 }
 function priceAt(D, cm, i) { return cm ? cm.c[i] : D.close[i]; }
+
+// The chart is a canvas, so every value in it is invisible to a screen reader. These give the
+// same numbers keyboard-first: the canvas is focusable and announces the selected day.
+let KEYIDX = -1;
+function readoutFor(i) {
+  if (!BAND || i < 0 || i >= BAND.n) return "";
+  const { D, cm } = BAND;
+  const px = priceAt(D, cm, i), m = D.mid[i], l3 = D.low3[i], l4 = D.low4 ? D.low4[i] : null, s = sdAt(D, i);
+  const pos = (px != null && m != null && s) ? (px - m) / s : null;
+  const parts = [D.dates[i], "close " + (px == null ? "—" : px.toFixed(2)),
+    "mid " + (m == null ? "—" : m.toFixed(2)),
+    "−3σ " + (l3 == null ? "—" : l3.toFixed(2)),
+    "−4σ " + (l4 == null ? "—" : l4.toFixed(2))];
+  if (pos != null) parts.push((pos >= 0 ? "+" : "") + pos.toFixed(2) + "σ");
+  return parts.join(" · ");
+}
+function keyMove(i) {
+  if (!BAND) return;
+  KEYIDX = Math.min(BAND.n - 1, Math.max(0, i));
+  drawBand(BAND.t, KEYIDX);   // drawBand clears BAND and LAST_HOVER, then redraws
+  LAST_HOVER = KEYIDX;
+  $("chartReadout").textContent = readoutFor(KEYIDX);
+}
+$("band").addEventListener("keydown", e => {
+  const last = BAND ? BAND.n - 1 : 0;
+  const from = KEYIDX === -1 ? last : KEYIDX;
+  const moves = { ArrowLeft: from - 1, ArrowRight: from + 1, Home: 0, End: last };
+  if (!(e.key in moves)) return;
+  e.preventDefault();
+  keyMove(moves[e.key]);
+});
+$("band").addEventListener("blur", () => { KEYIDX = -1; $("chartReadout").textContent = ""; });
 
 function drawBand(t, hover = -1) {
   const c = DATA.charts[t], cv = $("band"), ctx = cv.getContext("2d");
