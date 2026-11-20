@@ -41,12 +41,20 @@ python monthly_screener.py --show-paper
 |---|---|
 | `screener_latest.md` | Human-readable screen table + AI-check prompts |
 | `screener_data.json` | Machine-readable screen data + chart series for the dashboard |
-| `dashboard.html` | Interactive local dashboard — open in browser after each run |
+| `index.html` | Interactive local dashboard — current UI, served over HTTP after each run |
+| `dashboard.html` | Earlier dashboard version, same data — kept for reference |
 | `paper_trades.csv` | Paper-trade ledger (BUY/SELL with price, σ position, thesis note) |
 
 ## Dashboard
 
-Open `dashboard.html` in a browser after running the screener. Features:
+The dashboard loads `screener_data.json` with `fetch`, which browsers block on `file://` origins, so serve the folder instead of double-clicking the file:
+
+```bash
+python -m http.server 8000
+# then open http://localhost:8000/index.html
+```
+
+`dashboard.html` is the earlier version of the same dashboard (open `http://localhost:8000/dashboard.html`). Features:
 
 - Sortable/filterable table with color-coded σ position, P/E, slope, and 52-week drawdown
 - Per-stock σ-band chart (trend line view + daily candlestick view)
