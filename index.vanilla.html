@@ -1,0 +1,1584 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>σ-Channel Screener — shadcn/dashboard-01</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   shadcn/ui DESIGN TOKENS (New York / Zinc Style)
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  --card: #0c0d12;
+  --card-foreground: #f4f4f5;
+  --popover: #09090b;
+  --popover-foreground: #f4f4f5;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --secondary: #27272a;
+  --secondary-foreground: #f4f4f5;
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #fca5a5;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #d4d4d8;
+  --radius: 8px;
+
+  /* sidebar tokens */
+  --sidebar: #09090b;
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-primary: #18181b;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #18181b;
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: #27272a;
+  --sidebar-width: 260px;
+  --header-height: 52px;
+
+  /* financial semantic indicators */
+  --sig-green: #22c55e;
+  --sig-green-subtle: rgba(34, 197, 94, 0.12);
+  --sig-amber: #f59e0b;
+  --sig-amber-subtle: rgba(245, 158, 11, 0.12);
+  --sig-red: #ef4444;
+  --sig-red-subtle: rgba(239, 68, 68, 0.12);
+  --sig-blue: #38bdf8;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LAYOUT: SidebarProvider + SidebarInset (matching @shadcn/dashboard-01)
+   ══════════════════════════════════════════════════════════════════════════ */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* Sidebar */
+.app-sidebar {
+  width: var(--sidebar-width);
+  background: var(--sidebar);
+  border-right: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 30;
+}
+.app-sidebar.collapsed {
+  width: 60px;
+}
+.sidebar-header {
+  height: var(--header-height);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+.brand-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.brand-icon {
+  width: 30px;
+  height: 30px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.app-sidebar.collapsed .brand-title { display: none; }
+
+.sidebar-content {
+  flex: 1;
+  padding: 12px 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidebar-group-label {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.app-sidebar.collapsed .sidebar-group-label { display: none; }
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--muted-foreground);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.sidebar-item:hover {
+  background: var(--sidebar-accent);
+  color: var(--foreground);
+}
+.sidebar-item.active {
+  background: var(--sidebar-accent);
+  color: var(--foreground);
+  border-color: #3f3f46;
+}
+.sidebar-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.app-sidebar.collapsed .sidebar-item span { display: none; }
+
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--sidebar-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #27272a;
+  color: #a1a1aa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+.user-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 12px;
+}
+.user-name { font-weight: 600; color: var(--foreground); truncate; }
+.user-role { color: var(--muted-foreground); font-size: 11px; }
+.app-sidebar.collapsed .user-info { display: none; }
+
+/* Main Inset */
+.app-inset {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Site Header */
+.site-header {
+  height: var(--header-height);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.btn-icon {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  width: 32px;
+  height: 32px;
+  border-radius: calc(var(--radius) - 2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-icon:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.separator-v {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.breadcrumb-item { color: var(--muted-foreground); text-decoration: none; }
+.breadcrumb-item:hover { color: var(--foreground); }
+.breadcrumb-item.current { color: var(--foreground); font-weight: 500; }
+.breadcrumb-separator { color: #52525b; font-size: 11px; }
+
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.command-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.command-btn:hover {
+  border-color: #3f3f46;
+  color: var(--foreground);
+}
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: #a1a1aa;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MAIN DASHBOARD CONTENT
+   ══════════════════════════════════════════════════════════════════════════ */
+.main-content {
+  flex: 1;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Section Cards (Metric Grid matching @shadcn/dashboard-01) */
+.section-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  transition: border-color 0.15s;
+}
+.card:hover { border-color: #3f3f46; }
+.card-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.card-desc {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.card-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-family: var(--font-mono);
+  color: var(--foreground);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border);
+}
+.badge.outline {
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.badge.green {
+  background: var(--sig-green-subtle);
+  color: var(--sig-green);
+  border-color: rgba(34, 197, 94, 0.25);
+}
+.badge.amber {
+  background: var(--sig-amber-subtle);
+  color: var(--sig-amber);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+.badge.red {
+  background: var(--sig-red-subtle);
+  color: var(--sig-red);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+.card-footer {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Interactive Chart Card */
+.chart-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.chart-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.chart-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chart-heading {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.chart-subheading {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.toggle-group {
+  display: flex;
+  background: #18181b;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 2px;
+  gap: 2px;
+}
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.toggle-btn.active {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 290px;
+  background: #09090b;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+}
+canvas#sigmaChart {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#chartTip {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  background: rgba(12, 13, 18, 0.95);
+  border: 1px solid #3f3f46;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  z-index: 10;
+  min-width: 210px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+  font-family: var(--font-mono);
+}
+
+/* Dual Column: Data Table + Detail Inspector */
+.data-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(360px, 1fr);
+  gap: 20px;
+}
+@media (max-width: 1100px) {
+  .data-detail-grid { grid-template-columns: 1fr; }
+}
+
+/* Data Table Card */
+.table-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-toolbar {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.search-input {
+  background: #09090b;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 6px 12px;
+  color: var(--foreground);
+  font-size: 12.5px;
+  flex: 1;
+  min-width: 160px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-input:focus { border-color: var(--ring); }
+.select-filter {
+  background: #09090b;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 6px 10px;
+  color: var(--foreground);
+  font-size: 12.5px;
+  outline: none;
+  cursor: pointer;
+}
+.table-tabs {
+  display: flex;
+  gap: 4px;
+}
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab-btn:hover { color: var(--foreground); }
+.tab-btn.active {
+  background: #18181b;
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+.table-wrap {
+  overflow-x: auto;
+  max-height: 520px;
+}
+table.shadcn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+table.shadcn-table th {
+  position: sticky;
+  top: 0;
+  background: #09090b;
+  z-index: 5;
+  text-align: right;
+  padding: 9px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+table.shadcn-table th:first-child,
+table.shadcn-table td:first-child { text-align: left; }
+table.shadcn-table th:hover { color: var(--foreground); }
+table.shadcn-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #18181b;
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+table.shadcn-table tr {
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+table.shadcn-table tr:hover {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+table.shadcn-table tr.selected {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+.ticker-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--foreground);
+}
+.stier-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sig-blue);
+  flex-shrink: 0;
+}
+
+/* Detail Inspector Card */
+.inspector-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.inspector-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.inspector-title-box h3 {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
+}
+.inspector-price {
+  font-size: 22px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--foreground);
+}
+.inspector-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.inspect-stat {
+  background: var(--card);
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.inspect-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.inspect-value {
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.inspector-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  max-height: 480px;
+}
+.tv-frame {
+  width: 100%;
+  height: 240px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: #000;
+}
+.prompt-box {
+  background: #09090b;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.prompt-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.prompt-box-header span {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.copy-btn {
+  background: #18181b;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+}
+.copy-btn:hover { background: #27272a; }
+.copy-btn.copied {
+  color: var(--sig-green);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+.prompt-text {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #a1a1aa;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COMMAND PALETTE DIALOG (Ctrl+K)
+   ══════════════════════════════════════════════════════════════════════════ */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+}
+.dialog-overlay.open { display: flex; }
+.command-dialog {
+  width: 100%;
+  max-width: 540px;
+  background: #09090b;
+  border: 1px solid #3f3f46;
+  border-radius: var(--radius);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.command-dialog-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.command-dialog-input {
+  background: transparent;
+  border: none;
+  color: var(--foreground);
+  font-size: 14px;
+  width: 100%;
+  outline: none;
+}
+.command-dialog-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.command-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--foreground);
+  transition: background 0.1s;
+}
+.command-item:hover, .command-item.focused {
+  background: #18181b;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SONNER TOAST
+   ═══════════════════════════════════════════════════ */
+#toaster {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  background: #09090b;
+  border: 1px solid #3f3f46;
+  color: var(--foreground);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: toastIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes toastIn {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Responsive */
+@media (max-width: 800px) {
+  .app-sidebar { position: fixed; height: 100vh; transform: translateX(-100%); }
+  .app-sidebar.mobile-open { transform: translateX(0); }
+}
+</style>
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- ═══ APP SIDEBAR (@shadcn/sidebar) ═══ -->
+  <aside class="app-sidebar" id="appSidebar">
+    <div class="sidebar-header">
+      <a href="#" class="brand-link">
+        <div class="brand-icon">σ</div>
+        <div class="brand-title">σ-Channel Screener</div>
+      </a>
+    </div>
+
+    <div class="sidebar-content">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Platform</div>
+        <a class="sidebar-item active" id="navDashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span>Screener Dashboard</span>
+        </a>
+        <a class="sidebar-item" id="navSignals" onclick="filterByPreset('sig')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          <span>Action Signals</span>
+        </a>
+        <a class="sidebar-item" id="navStier" onclick="filterByPreset('tier')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          <span>S-Tier Watchlist</span>
+        </a>
+      </div>
+
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Strategy Specs</div>
+        <div class="sidebar-item" style="cursor:default">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span style="font-size:12px;color:#a1a1aa">2500d OLS Linear</span>
+        </div>
+        <div class="sidebar-item" style="cursor:default">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          <span style="font-size:12px;color:#a1a1aa">S-Tier −3σ / Standard −4σ</span>
+        </div>
+        <div class="sidebar-item" style="cursor:default">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+          <span style="font-size:12px;color:#a1a1aa">Slope &gt; 0 &amp; Band &gt; 0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-avatar">CASH</div>
+      <div class="user-info">
+        <span class="user-name">Paper Portfolio</span>
+        <span class="user-role" id="asofDate">as of 2026-11-19</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ INSET AREA ═══ -->
+  <div class="app-inset">
+
+    <!-- Site Header -->
+    <header class="site-header">
+      <button class="btn-icon" id="sidebarToggle" title="Toggle Sidebar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+      </button>
+      <div class="separator-v"></div>
+      <nav class="breadcrumb">
+        <a href="#" class="breadcrumb-item">Screener</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-item current">σ-Channel Dashboard</span>
+      </nav>
+
+      <div class="header-right">
+        <button class="command-btn" id="openCommandDialog">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span>Search ticker...</span>
+          <span class="kbd">⌘K</span>
+        </button>
+        <span class="badge outline" style="font-family:var(--font-mono);font-size:11px" id="headerCount">43 Tickers</span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- ═══ METRIC SECTION CARDS (SectionCards block) ═══ -->
+      <section class="section-cards">
+        <div class="card">
+          <div class="card-header-row">
+            <span class="card-desc">Total Universe</span>
+            <span class="badge outline">US Large-Cap</span>
+          </div>
+          <div class="card-title" id="statTotal">43</div>
+          <div class="card-footer">
+            <span>Market Cap &gt; $50B · 10y History</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header-row">
+            <span class="card-desc">Action Required</span>
+            <span class="badge green" id="statActionBadge">0 Signals</span>
+          </div>
+          <div class="card-title" style="color:var(--sig-green)" id="statAction">0</div>
+          <div class="card-footer">
+            <span>At or below −3σ / −4σ buy lines</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header-row">
+            <span class="card-desc">Radar Watch</span>
+            <span class="badge amber" id="statWatchBadge">0 Approaching</span>
+          </div>
+          <div class="card-title" style="color:var(--sig-amber)" id="statWatch">0</div>
+          <div class="card-footer">
+            <span>Within 0.5σ of buy threshold</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header-row">
+            <span class="card-desc">Deepest Discount</span>
+            <span class="badge outline" id="statLeaderBadge">−2.44σ</span>
+          </div>
+          <div class="card-title" id="statLeaderTicker">MCD</div>
+          <div class="card-footer">
+            <span id="statLeaderDesc">McDonald's @ $272.32 (Buy @ $245.97)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ INTERACTIVE CHART CARD (ChartAreaInteractive block) ═══ -->
+      <section class="chart-card">
+        <div class="chart-header-row">
+          <div class="chart-title-wrap">
+            <div class="chart-heading" id="chartTickerHeader">MCD — 2500-Day σ-Channel Analysis</div>
+            <div class="chart-subheading">Linear regression channel with Take-Profit Midline &amp; Statistical Buy Bands</div>
+          </div>
+          <div class="toggle-group">
+            <button class="toggle-btn active" id="btnModeTrend">Trend (6Y)</button>
+            <button class="toggle-btn" id="btnModeCandles">Candles (2Y)</button>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap" id="chartContainer">
+          <canvas id="sigmaChart"></canvas>
+          <div id="chartTip"></div>
+        </div>
+      </section>
+
+      <!-- ═══ DUAL COLUMN: DATA TABLE + DETAIL INSPECTOR ═══ -->
+      <div class="data-detail-grid">
+
+        <!-- DataTable Card -->
+        <section class="table-card">
+          <div class="table-toolbar">
+            <div class="table-tabs">
+              <button class="tab-btn active" id="tabAll" onclick="filterByPreset('all')">All</button>
+              <button class="tab-btn" id="tabSig" onclick="filterByPreset('sig')">Action + Watch</button>
+              <button class="tab-btn" id="tabTier" onclick="filterByPreset('tier')">S-Tier Top 10</button>
+            </div>
+            <input type="text" class="search-input" id="tableSearch" placeholder="Filter ticker or thesis...">
+            <select class="select-filter" id="slopeFilter">
+              <option value="">Any Slope</option>
+              <option value="up">Slope Up (10y Growth)</option>
+              <option value="down">Flat / Down (Skip)</option>
+            </select>
+          </div>
+
+          <div class="table-wrap">
+            <table class="shadcn-table">
+              <thead>
+                <tr>
+                  <th data-k="ticker">Ticker</th>
+                  <th data-k="price">Price</th>
+                  <th data-k="pos">σ Pos</th>
+                  <th data-k="buy">Buy Line</th>
+                  <th data-k="slope">Slope</th>
+                  <th data-k="mcap">MCap</th>
+                  <th data-k="pe">P/E</th>
+                  <th data-k="off52w">52w Drawdown</th>
+                  <th data-k="signal">Signal</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Detail Inspector Card -->
+        <section class="inspector-card" id="inspectorCard">
+          <div class="inspector-header">
+            <div class="inspector-title-box">
+              <div style="display:flex;align-items:center;gap:8px">
+                <h3 id="inspectTicker">MCD</h3>
+                <span class="badge outline" id="inspectTierBadge">Standard</span>
+              </div>
+              <span style="font-size:12px;color:var(--muted-foreground)" id="inspectNote">Hold/cash — no signal</span>
+            </div>
+            <div style="text-align:right">
+              <div class="inspector-price" id="inspectPrice">$272.32</div>
+              <span style="font-size:11px;color:var(--muted-foreground)" id="inspectDate">2026-11-19</span>
+            </div>
+          </div>
+
+          <div class="inspector-metrics-grid" id="inspectMetrics">
+            <div class="inspect-stat"><span class="inspect-label">σ Position</span><span class="inspect-value" id="mPos">−2.44σ</span></div>
+            <div class="inspect-stat"><span class="inspect-label">Buy Threshold</span><span class="inspect-value" id="mBuy">−4σ @ $245.97</span></div>
+            <div class="inspect-stat"><span class="inspect-label">Take-Profit Mid</span><span class="inspect-value" id="mMid" style="color:var(--sig-green)">$313.66 (+15%)</span></div>
+            <div class="inspect-stat"><span class="inspect-label">Regression Slope</span><span class="inspect-value" id="mSlope">Up (Growth)</span></div>
+            <div class="inspect-stat"><span class="inspect-label">Market Cap</span><span class="inspect-value" id="mMcap">n/a</span></div>
+            <div class="inspect-stat"><span class="inspect-label">P/E &amp; P/B</span><span class="inspect-value" id="mValuation">n/a · n/a</span></div>
+          </div>
+
+          <div class="inspector-body">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:12px;font-weight:600;color:var(--foreground)">TradingView Live Chart</span>
+                <span style="font-size:10.5px;color:var(--muted-foreground)" id="tvStatus">● Connected</span>
+              </div>
+              <iframe id="tvIframe" class="tv-frame" src="about:blank" title="TradingView" loading="lazy"></iframe>
+            </div>
+
+            <div class="prompt-box">
+              <div class="prompt-box-header">
+                <span>AI Fundamental Check Prompt</span>
+                <button class="copy-btn" id="copyPromptBtn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  <span id="copyBtnText">Copy Prompt</span>
+                </button>
+              </div>
+              <div class="prompt-text" id="promptContent"></div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+    </main>
+  </div>
+
+</div>
+
+<!-- ═══ COMMAND DIALOG (⌘K Palette) ═══ -->
+<div class="dialog-overlay" id="commandOverlay">
+  <div class="command-dialog">
+    <div class="command-dialog-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input type="text" class="command-dialog-input" id="commandInput" placeholder="Type a ticker or name..." autocomplete="off">
+      <span class="kbd">ESC</span>
+    </div>
+    <div class="command-dialog-list" id="commandList"></div>
+  </div>
+</div>
+
+<!-- ═══ SONNER TOAST CONTAINER ═══ -->
+<div id="toaster"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   DATA & STATE
+   ══════════════════════════════════════════════════════════════════════════ */
+const STIER = new Set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","BRK-B","AVGO","TSLA","JPM"]);
+let DATA = null, SEL = "MCD", MODE = "all", QUERY = "", SLOPE = "";
+let SORT = { k: "pos", dir: 1 }, VIEW_MODE = "line";
+
+const $ = id => document.getElementById(id);
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TOAST HELPER (Sonner vanilla equivalent)
+   ══════════════════════════════════════════════════════════════════════════ */
+function toast(msg, icon = "✓") {
+  const toaster = $("toaster");
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.innerHTML = `<span style="color:var(--sig-green);font-weight:700">${icon}</span><span>${msg}</span>`;
+  toaster.appendChild(t);
+  setTimeout(() => {
+    t.style.opacity = "0";
+    t.style.transform = "translateY(10px)";
+    t.style.transition = "all 0.2s";
+    setTimeout(() => t.remove(), 200);
+  }, 2200);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HELPERS & FORMATTERS
+   ══════════════════════════════════════════════════════════════════════════ */
+function tvSymbol(t) {
+  if (t === "BRK-B") return "NYSE:BRK.B";
+  const nyse = new Set(["JPM","XOM","JNJ","UNH","MCD","CRM","MRK","ABBV","KO","WMT","HD","DIS","NKE","CAT","GE","BA","GS","MS","V","MA","IBM","ORCL","LLY"]);
+  return (nyse.has(t) ? "NYSE:" : "NASDAQ:") + t;
+}
+
+function money(v) { return v ? "$" + Math.round(v / 1e9) + "B" : "n/a"; }
+
+function getVerdict(r) {
+  const n = r.note || "";
+  if (n.startsWith("ACTION")) return { text: "ACTION", cls: "green" };
+  if (n.startsWith("WATCH"))  return { text: "WATCH", cls: "amber" };
+  if (n.startsWith("SKIP"))   return { text: "SKIP", cls: "red" };
+  return { text: "HOLD", cls: "outline" };
+}
+
+function sdColor(r) {
+  if (r.pos === undefined) return "var(--muted-foreground)";
+  if (r.pos <= -r.k) return "var(--sig-green)";
+  if (r.pos <= -(r.k - 0.5)) return "var(--sig-amber)";
+  if (r.pos >= 2) return "var(--sig-red)";
+  return "var(--foreground)";
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DATA LOADING
+   ══════════════════════════════════════════════════════════════════════════ */
+async function init() {
+  try {
+    const res = await fetch("screener_data.json?v=" + Date.now());
+    if (!res.ok) throw new Error("screener_data.json not found");
+    DATA = await res.json();
+    $("asofDate").textContent = "as of " + DATA.asof;
+
+    // calculate metrics
+    const rows = DATA.rows;
+    let nAction = 0, nWatch = 0, bestDiscount = null;
+    rows.forEach(r => {
+      const n = r.note || "";
+      if (n.startsWith("ACTION")) nAction++;
+      else if (n.startsWith("WATCH")) nWatch++;
+      if (r.pos !== undefined && (bestDiscount === null || r.pos < bestDiscount.pos)) {
+        bestDiscount = r;
+      }
+    });
+
+    $("statTotal").textContent = rows.length;
+    $("headerCount").textContent = rows.length + " Tickers";
+    $("statAction").textContent = nAction;
+    $("statActionBadge").textContent = nAction + " Signals";
+    $("statWatch").textContent = nWatch;
+    $("statWatchBadge").textContent = nWatch + " Near Line";
+
+    if (bestDiscount) {
+      SEL = bestDiscount.ticker;
+      $("statLeaderTicker").textContent = bestDiscount.ticker;
+      $("statLeaderBadge").textContent = bestDiscount.pos.toFixed(2) + "σ";
+      const buyPrice = (bestDiscount.k === 3 ? bestDiscount.low3 : bestDiscount.low4).toFixed(2);
+      $("statLeaderDesc").textContent = `${bestDiscount.ticker} @ $${bestDiscount.price.toFixed(2)} (Buy @ $${buyPrice})`;
+    }
+
+    renderTable();
+    selectStock(SEL);
+    initCommandPalette();
+  } catch (err) {
+    console.error(err);
+    toast("Failed to load screener_data.json", "✕");
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   TABLE RENDERING
+   ═══════════════════════════════════════════════════ */
+function filterRows() {
+  return DATA.rows.filter(r => {
+    if (MODE === "sig" && !/^(ACTION|WATCH)/.test(r.note || "")) return false;
+    if (MODE === "tier" && !STIER.has(r.ticker)) return false;
+    if (SLOPE === "up" && !(r.pos !== undefined && r.slope_up)) return false;
+    if (SLOPE === "down" && !(r.pos !== undefined && !r.slope_up)) return false;
+    if (QUERY) {
+      const q = QUERY.toUpperCase();
+      if (!r.ticker.includes(q) && !(r.note || "").toUpperCase().includes(q)) return false;
+    }
+    return true;
+  }).sort((a, b) => {
+    let va = a[SORT.k], vb = b[SORT.k];
+    if (SORT.k === "buy") {
+      va = a.k === 3 ? a.low3 : a.low4;
+      vb = b.k === 3 ? b.low3 : b.low4;
+    }
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (va < vb) return -SORT.dir;
+    if (va > vb) return SORT.dir;
+    return a.ticker < b.ticker ? -1 : 1;
+  });
+}
+
+function renderTable() {
+  const tbody = $("tableBody");
+  tbody.innerHTML = "";
+  const list = filterRows();
+
+  list.forEach(r => {
+    const tr = document.createElement("tr");
+    if (r.ticker === SEL) tr.className = "selected";
+
+    const v = getVerdict(r);
+    const buy = r.pos === undefined ? "—" : ("−" + r.k + "σ @ " + (r.k === 3 ? r.low3 : r.low4).toFixed(2));
+    const isStier = STIER.has(r.ticker);
+
+    tr.innerHTML = `
+      <td>
+        <div class="ticker-title">
+          ${isStier ? '<span class="stier-dot" title="S-Tier Top 10"></span>' : '<span style="width:6px"></span>'}
+          <span>${r.ticker}</span>
+        </div>
+      </td>
+      <td>$${r.price.toFixed(2)}</td>
+      <td style="color:${sdColor(r)};font-weight:600">${r.pos === undefined ? "—" : r.pos.toFixed(2) + "σ"}</td>
+      <td style="color:var(--muted-foreground)">${buy}</td>
+      <td style="color:${r.slope_up ? "var(--sig-green)" : "var(--sig-red)"}">${r.pos === undefined ? "—" : (r.slope_up ? "↑ Up" : "↓ Flat")}</td>
+      <td>${money(r.mcap)}</td>
+      <td>${r.pe ? r.pe.toFixed(1) : "n/a"}</td>
+      <td style="color:${r.off52w <= -0.25 ? "var(--sig-red)" : (r.off52w <= -0.05 ? "var(--sig-amber)" : "var(--sig-green)")}">
+        ${r.off52w === undefined ? "—" : (r.off52w * 100).toFixed(1) + "%"}
+      </td>
+      <td><span class="badge ${v.cls}">${v.text}</span></td>
+    `;
+    tr.onclick = () => selectStock(r.ticker);
+    tbody.appendChild(tr);
+  });
+}
+
+function filterByPreset(mode) {
+  MODE = mode;
+  $("tabAll").classList.toggle("active", mode === "all");
+  $("tabSig").classList.toggle("active", mode === "sig");
+  $("tabTier").classList.toggle("active", mode === "tier");
+  renderTable();
+}
+
+/* ═══════════════════════════════════════════════════
+   STOCK INSPECTOR & DETAIL
+   ═══════════════════════════════════════════════════ */
+function selectStock(ticker) {
+  SEL = ticker;
+  const r = DATA.rows.find(x => x.ticker === ticker);
+  if (!r) return;
+
+  $("inspectTicker").textContent = r.ticker;
+  $("inspectPrice").textContent = "$" + r.price.toFixed(2);
+  $("inspectDate").textContent = r.date;
+  $("inspectTierBadge").textContent = STIER.has(ticker) ? "S-Tier Asset" : "Standard Universe";
+  $("inspectNote").textContent = r.note || "Hold / Cash";
+
+  // Metrics
+  $("mPos").textContent = (r.pos >= 0 ? "+" : "") + (r.pos !== undefined ? r.pos.toFixed(2) + "σ" : "—");
+  $("mPos").style.color = sdColor(r);
+
+  const buyPrice = (r.k === 3 ? r.low3 : r.low4)?.toFixed(2) ?? "—";
+  $("mBuy").textContent = `−${r.k}σ @ $${buyPrice}`;
+
+  const upside = (r.mid / r.price - 1);
+  const upsideTxt = (upside >= 0 ? "+" : "") + Math.round(upside * 100) + "%";
+  $("mMid").textContent = `$${r.mid.toFixed(2)} (${upsideTxt})`;
+  $("mMid").style.color = upside >= 0.2 ? "var(--sig-green)" : (upside < 0 ? "var(--sig-red)" : "var(--foreground)");
+
+  $("mSlope").textContent = r.slope_up ? "↑ 10y Upward Trend" : "↓ Flat / Downward";
+  $("mSlope").style.color = r.slope_up ? "var(--sig-green)" : "var(--sig-red)";
+
+  $("mMcap").textContent = money(r.mcap);
+  $("mValuation").textContent = `P/E ${r.pe ? r.pe.toFixed(1) : "n/a"} · P/B ${r.pb ? r.pb.toFixed(1) : "n/a"}`;
+
+  // Chart Title
+  $("chartTickerHeader").textContent = `${r.ticker} — 2500-Day σ-Channel Analysis ($${r.price.toFixed(2)})`;
+
+  // TradingView Iframe
+  $("tvIframe").src = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol(ticker))}&interval=D&theme=dark&style=1&withdateranges=1&hide_side_toolbar=1&allow_symbol_change=0`;
+  $("tvStatus").textContent = `● Live: ${r.ticker}`;
+
+  // AI Prompt
+  const prompt = `Fundamental check for ${r.ticker} at $${r.price.toFixed(2)} (${r.pos >= 0 ? "+" : ""}${r.pos.toFixed(2)} σ below trend).\n` +
+    `With web search on, answer ONLY:\n(1) TEMPORARY recoverable dip or PERMANENT damage? Cite the cause + 2-3 recent sources.\n` +
+    `(2) Bankruptcy/severe distress risk in 12-24 months? Cover debt, interest coverage, FCF, maturities, dividend.\n` +
+    `End with GREEN LIGHT or RED LIGHT + one paragraph of reasoning.`;
+  $("promptContent").textContent = prompt;
+
+  drawChart(ticker);
+  renderTable();
+}
+
+/* ═══════════════════════════════════════════════════
+   CHART DRAWING (High-DPI Canvas + Crosshair)
+   ═══════════════════════════════════════════════════ */
+let CHART_CTX = null;
+
+function drawChart(t, hoverIdx = -1) {
+  const chartData = DATA.charts[t];
+  const cv = $("sigmaChart");
+  const ctx = cv.getContext("2d");
+  const rect = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+
+  cv.width = rect.width * dpr;
+  cv.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+
+  ctx.clearRect(0, 0, W, H);
+  if (!chartData) return;
+
+  const cm = (VIEW_MODE === "candle" && chartData.candles) ? chartData.candles : null;
+  const D = cm ? { dates: cm.dates, mid: cm.mid, low3: cm.low3, low4: cm.low4 } : chartData;
+  const n = D.dates.length;
+  if (n < 2) return;
+
+  const series = [["mid", "#38bdf8", 1.5], ["low3", "#22c55e", 1.5], ["low4", "#f59e0b", 1.5]];
+  if (!cm) series.unshift(["close", "#f4f4f5", 2]);
+
+  let lo = Infinity, hi = -Infinity;
+  for (const [k] of series) for (const v of D[k]) if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  if (cm) for (let i = 0; i < n; i++) if (cm.h[i] != null) { lo = Math.min(lo, cm.l[i]); hi = Math.max(hi, cm.h[i]); }
+
+  const L = 50, R = 54, T = 12, B = 24;
+  const pad = (hi - lo) * 0.08 || 1;
+  const X = i => L + i / (n - 1) * (W - L - R);
+  const Y = v => T + (1 - (v - (lo - pad)) / ((hi + pad) - (lo - pad))) * (H - T - B);
+  CHART_CTX = { t, D, cm, n, X, Y, L, R, T, B, lo: lo - pad, hi: hi + pad, W, H };
+
+  // Grid
+  ctx.strokeStyle = "#27272a";
+  ctx.lineWidth = 1;
+  ctx.fillStyle = "#71717a";
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  for (let g = 0; g <= 4; g++) {
+    const v = lo - pad + (hi - lo + 2 * pad) * g / 4, y = Y(v);
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(W - R, y); ctx.stroke();
+    ctx.fillText(v.toFixed(0), W - R + 6, y + 3.5);
+  }
+
+  // Left sigma ticks
+  let li = n - 1;
+  while (li > 0 && (D.mid[li] == null || D.low3[li] == null)) li--;
+  const mL = D.mid[li], sL = (D.mid[li] - D.low3[li]) / 3;
+  if (mL != null && sL > 0) {
+    [-4, -3, 0].forEach(k => {
+      const p = mL + k * sL, y = Y(p);
+      if (y >= T && y <= H - B) {
+        ctx.fillStyle = k === 0 ? "#38bdf8" : (k === -3 ? "#22c55e" : "#f59e0b");
+        ctx.fillText(k === 0 ? "0σ" : `${k}σ`, 8, y + 3.5);
+      }
+    });
+  }
+
+  // Candlesticks (if candle mode)
+  if (cm) {
+    const bw = Math.max(2, (W - L - R) / n * 0.65);
+    for (let i = 0; i < n; i++) {
+      const o = cm.o[i], h = cm.h[i], l = cm.l[i], cl = cm.c[i];
+      if (o == null || h == null || l == null || cl == null) continue;
+      const col = cl >= o ? "#22c55e" : "#ef4444", x = X(i);
+      ctx.strokeStyle = col; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, Y(h)); ctx.lineTo(x, Y(l)); ctx.stroke();
+      const yO = Y(o), yC = Y(cl);
+      ctx.fillStyle = col;
+      ctx.fillRect(x - bw / 2, Math.min(yO, yC), bw, Math.max(1.5, Math.abs(yC - yO)));
+    }
+  }
+
+  // Lines
+  const colors = { close: "#f4f4f5", mid: "#38bdf8", low3: "#22c55e", low4: "#f59e0b" };
+  for (const [k, , w] of series) {
+    ctx.strokeStyle = colors[k]; ctx.lineWidth = w; ctx.beginPath();
+    let pen = false;
+    D[k].forEach((v, i) => {
+      if (v == null) { pen = false; return; }
+      const x = X(i), y = Y(v);
+      if (!pen) { ctx.moveTo(x, y); pen = true; } else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  // Legend pill
+  ctx.font = "10.5px 'Inter', sans-serif";
+  const legend = [[cm ? "candle" : "close", cm ? "Price Candles" : "Weekly Close"], ["mid", "Midline (Take-Profit)"], ["low3", "−3σ (S-Tier)"], ["low4", "−4σ (Buy Others)"]];
+  let lx = L + 8;
+  ctx.fillStyle = "rgba(9, 9, 11, 0.85)";
+  ctx.fillRect(L + 2, 4, 380, 20);
+  legend.forEach(([k, label]) => {
+    ctx.strokeStyle = colors[k]; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(lx, 14); ctx.lineTo(lx + 14, 14); ctx.stroke();
+    ctx.fillStyle = "#a1a1aa";
+    ctx.fillText(label, lx + 18, 17.5);
+    lx += ctx.measureText(label).width + 30;
+  });
+
+  // Crosshair
+  if (hoverIdx >= 0 && hoverIdx < n) {
+    const hx = X(hoverIdx), hp = cm ? cm.c[hoverIdx] : D.close[hoverIdx];
+    ctx.save();
+    ctx.strokeStyle = "rgba(161, 161, 170, 0.4)";
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(hx, T); ctx.lineTo(hx, H - B); ctx.stroke();
+    if (hp != null) {
+      ctx.beginPath(); ctx.moveTo(L, Y(hp)); ctx.lineTo(W - R, Y(hp)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#fafafa";
+      ctx.beginPath(); ctx.arc(hx, Y(hp), 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+// Hover interactions
+$("sigmaChart").addEventListener("mousemove", e => {
+  if (!CHART_CTX) return;
+  const cv = $("sigmaChart"), tip = $("chartTip"), rect = cv.getBoundingClientRect();
+  const mx = (e.clientX - rect.left);
+  const { D, cm, n, X, W, H } = CHART_CTX;
+
+  let best = 0, bd = 1e9;
+  for (let i = 0; i < n; i++) {
+    const d = Math.abs(X(i) - mx);
+    if (d < bd) { bd = d; best = i; }
+  }
+  drawChart(CHART_CTX.t, best);
+
+  const m = D.mid[best], l3 = D.low3[best], l4 = D.low4?.[best];
+  const px = cm ? cm.c[best] : D.close[best];
+  const s = (m != null && l3 != null) ? (m - l3) / 3 : null;
+  const pos = (px != null && m != null && s) ? (px - m) / s : null;
+
+  tip.innerHTML = `
+    <div style="font-weight:700;color:#fff;margin-bottom:4px">${D.dates[best]}</div>
+    <div>Price: <b>$${px?.toFixed(2) ?? "—"}</b></div>
+    <div style="color:#38bdf8">Mid: $${m?.toFixed(2) ?? "—"} (0σ)</div>
+    <div style="color:#22c55e">−3σ: $${l3?.toFixed(2) ?? "—"}</div>
+    <div style="color:#f59e0b">−4σ: $${l4?.toFixed(2) ?? "—"}</div>
+    <div style="margin-top:4px;border-top:1px solid #27272a;padding-top:4px">
+      Distance: <b style="color:${pos <= -3.5 ? "#22c55e" : (pos >= 2 ? "#ef4444" : "#fff")}">${pos >= 0 ? "+" : ""}${pos?.toFixed(2) ?? "—"}σ</b>
+    </div>
+  `;
+  tip.style.display = "block";
+  const parent = $("chartContainer").getBoundingClientRect();
+  let tx = e.clientX - parent.left + 14, ty = e.clientY - parent.top + 14;
+  tx = Math.min(tx, parent.width - 220);
+  ty = Math.min(ty, parent.height - 160);
+  tip.style.left = Math.max(4, tx) + "px";
+  tip.style.top = Math.max(4, ty) + "px";
+});
+
+$("sigmaChart").addEventListener("mouseleave", () => {
+  $("chartTip").style.display = "none";
+  if (CHART_CTX) drawChart(CHART_CTX.t, -1);
+});
+
+/* ═══════════════════════════════════════════════════
+   COMMAND PALETTE DIALOG (⌘K)
+   ═══════════════════════════════════════════════════ */
+function initCommandPalette() {
+  const overlay = $("commandOverlay"), input = $("commandInput"), list = $("commandList");
+
+  function open() {
+    overlay.classList.add("open");
+    input.value = "";
+    filterList("");
+    input.focus();
+  }
+  function close() { overlay.classList.remove("open"); }
+
+  $("openCommandDialog").onclick = open;
+  overlay.onclick = e => { if (e.target === overlay) close(); };
+
+  window.addEventListener("keydown", e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); open(); }
+    if (e.key === "Escape" && overlay.classList.contains("open")) { close(); }
+  });
+
+  function filterList(q) {
+    list.innerHTML = "";
+    const filterText = q.trim().toUpperCase();
+    const matches = DATA.rows.filter(r => !filterText || r.ticker.includes(filterText) || (r.note || "").toUpperCase().includes(filterText)).slice(0, 10);
+
+    matches.forEach(r => {
+      const item = document.createElement("div");
+      item.className = "command-item";
+      item.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px">
+          <b>${r.ticker}</b>
+          <span style="color:#71717a;font-size:12px">$${r.price.toFixed(2)}</span>
+        </div>
+        <span class="badge ${getVerdict(r).cls}">${r.pos?.toFixed(2) ?? "—"}σ</span>
+      `;
+      item.onclick = () => {
+        selectStock(r.ticker);
+        close();
+      };
+      list.appendChild(item);
+    });
+  }
+
+  input.oninput = e => filterList(e.target.value);
+}
+
+/* ═══════════════════════════════════════════════════
+   EVENT LISTENERS
+   ═══════════════════════════════════════════════════ */
+// Sidebar Collapse
+$("sidebarToggle").onclick = () => {
+  $("appSidebar").classList.toggle("collapsed");
+  setTimeout(() => { if (SEL) drawChart(SEL); }, 220);
+};
+
+// Chart View Toggles
+$("btnModeTrend").onclick = () => {
+  VIEW_MODE = "line";
+  $("btnModeTrend").classList.add("active");
+  $("btnModeCandles").classList.remove("active");
+  if (SEL) drawChart(SEL);
+};
+$("btnModeCandles").onclick = () => {
+  VIEW_MODE = "candle";
+  $("btnModeCandles").classList.add("active");
+  $("btnModeTrend").classList.remove("active");
+  if (SEL) drawChart(SEL);
+};
+
+// Search & Slope Filters
+$("tableSearch").oninput = e => { QUERY = e.target.value; renderTable(); };
+$("slopeFilter").onchange = e => { SLOPE = e.target.value; renderTable(); };
+
+// Table Column Sorting
+document.querySelectorAll("th[data-k]").forEach(th => {
+  th.onclick = () => {
+    const k = th.dataset.k;
+    SORT = (SORT.k === k) ? { k, dir: -SORT.dir } : { k, dir: 1 };
+    renderTable();
+  };
+});
+
+// Copy Prompt
+$("copyPromptBtn").onclick = async () => {
+  await navigator.clipboard.writeText($("promptContent").textContent);
+  $("copyBtnText").textContent = "Copied ✓";
+  $("copyPromptBtn").classList.add("copied");
+  toast("Prompt copied to clipboard");
+  setTimeout(() => {
+    $("copyBtnText").textContent = "Copy Prompt";
+    $("copyPromptBtn").classList.remove("copied");
+  }, 1600);
+};
+
+window.addEventListener("resize", () => { if (SEL) drawChart(SEL); });
+
+init();
+</script>
+</body>
+</html>

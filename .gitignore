@@ -6,8 +6,13 @@ __pycache__/
 # Cached price data (large, regenerated on run)
 .cache/
 
+# Node & Frontend
+node_modules/
+dist/
+.vite/
+
 # Logs
 *.log
 
-# Freebuff agent state
+# Freebuff & Agent state
 .freebuff/
