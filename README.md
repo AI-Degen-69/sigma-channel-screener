@@ -93,6 +93,7 @@ python -m http.server 8000
 
 - Python 3.10+
 - NumPy
+- Node.js 20+ and pnpm (modern dashboard only)
 - Network access to Yahoo Finance (price history)
 - Optional: `opencli eastmoney` for live MCap/P-E/P-B quotes
 

@@ -4,8 +4,7 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardContent,
-  CardFooter
+  CardContent
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,19 +19,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import {
-  TrendingUp,
-  TrendingDown,
-  Search,
-  Copy,
-  Check,
-  Shield,
-  Layers,
-  Activity,
-  LineChart,
-  HelpCircle,
-  ExternalLink
-} from "lucide-react"
+import { Search, Copy, Check } from "lucide-react"
 
 interface ScreenerRow {
   ticker: string
@@ -80,6 +67,54 @@ interface ScreenerData {
 
 const STIER = new Set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","BRK-B","AVGO","TSLA","JPM"])
 
+type SeriesKey = "close" | "mid" | "low3" | "low4"
+
+interface ChartSeries {
+  close?: (number | null)[]
+  mid: (number | null)[]
+  low3: (number | null)[]
+  low4: (number | null)[]
+}
+
+const seriesFor = (series: ChartSeries, key: SeriesKey): (number | null)[] => {
+  if (key === "close") return series.close ?? []
+  if (key === "mid") return series.mid
+  if (key === "low3") return series.low3
+  return series.low4
+}
+
+const sortValue = (row: ScreenerRow, key: string): number | string | null => {
+  if (key === "buy") return row.k === 3 ? row.low3 : row.low4
+  const raw: unknown = (row as unknown as Record<string, unknown>)[key]
+  if (typeof raw === "boolean") return raw ? 1 : 0
+  if (typeof raw === "number" || typeof raw === "string") return raw
+  return null
+}
+
+const compareValues = (a: number | string, b: number | string): number => {
+  if (typeof a === "number" && typeof b === "number") return a - b
+  return String(a).localeCompare(String(b))
+}
+
+const signalBadge = (note: string | undefined) => {
+  if (note?.startsWith("ACTION")) {
+    return <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">ACTION</Badge>
+  }
+  if (note?.startsWith("WATCH")) {
+    return <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20">WATCH</Badge>
+  }
+  if (note?.startsWith("SKIP")) return <Badge variant="destructive">SKIP</Badge>
+  return <Badge variant="outline">HOLD</Badge>
+}
+
+const positionClass = (pos: number | null, k: number | null): string => {
+  if (pos === null || k === null) return "text-foreground"
+  if (pos <= -k) return "text-emerald-500 font-bold"
+  if (pos <= -(k - 0.5)) return "text-amber-500 font-semibold"
+  if (pos >= 2) return "text-rose-500"
+  return "text-foreground"
+}
+
 export default function App() {
   const [data, setData] = React.useState<ScreenerData | null>(null)
   const [selectedTicker, setSelectedTicker] = React.useState<string>("MCD")
@@ -91,15 +126,21 @@ export default function App() {
   const [chartMode, setChartMode] = React.useState<"line" | "candle">("line")
   const [copied, setCopied] = React.useState<boolean>(false)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null)
+  const [loadError, setLoadError] = React.useState<string | null>(null)
 
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
   const [hoverIndex, setHoverIndex] = React.useState<number>(-1)
   const [tooltipData, setTooltipData] = React.useState<{ x: number; y: number; text: string } | null>(null)
 
   React.useEffect(() => {
+    let cancelled = false
     fetch("/screener_data.json?v=" + Date.now())
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+        return res.json() as Promise<ScreenerData>
+      })
       .then((d: ScreenerData) => {
+        if (cancelled) return
         setData(d)
         // Select deepest discount
         if (d.rows && d.rows.length > 0) {
@@ -107,7 +148,14 @@ export default function App() {
           setSelectedTicker(sorted[0].ticker)
         }
       })
-      .catch(err => console.error("Error loading screener data:", err))
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.error("Error loading screener data:", err)
+        setLoadError(err instanceof Error ? err.message : String(err))
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const selectedRow = React.useMemo(() => {
@@ -127,18 +175,14 @@ export default function App() {
       }
       return true
     }).sort((a, b) => {
-      let va: any = (a as any)[sortKey]
-      let vb: any = (b as any)[sortKey]
-      if (sortKey === "buy") {
-        va = a.k === 3 ? a.low3 : a.low4
-        vb = b.k === 3 ? b.low3 : b.low4
-      }
-      if (va == null && vb == null) return 0
-      if (va == null) return 1
-      if (vb == null) return -1
-      if (va < vb) return -sortDir
-      if (va > vb) return sortDir
-      return a.ticker < b.ticker ? -1 : 1
+      const va = sortValue(a, sortKey)
+      const vb = sortValue(b, sortKey)
+      if (va === null && vb === null) return 0
+      if (va === null) return 1
+      if (vb === null) return -1
+      const cmp = compareValues(va, vb)
+      if (cmp !== 0) return cmp * sortDir
+      return a.ticker.localeCompare(b.ticker)
     })
   }, [data, activeTab, slopeFilter, searchQuery, sortKey, sortDir])
 
@@ -151,7 +195,7 @@ export default function App() {
     data.rows.forEach(r => {
       if ((r.note || "").startsWith("ACTION")) action++
       else if ((r.note || "").startsWith("WATCH")) watch++
-      if (r.pos !== undefined && (!leader || r.pos < leader.pos)) {
+      if (typeof r.pos === "number" && (!leader || r.pos < leader.pos)) {
         leader = r
       }
     })
@@ -179,11 +223,13 @@ export default function App() {
     ctx.clearRect(0, 0, W, H)
 
     const cm = chartMode === "candle" && chart.candles ? chart.candles : null
-    const D = cm ? { dates: cm.dates, mid: cm.mid, low3: cm.low3, low4: cm.low4 } : chart
+    const D: ChartSeries & { dates: string[] } = cm
+      ? { close: cm.c, dates: cm.dates, mid: cm.mid, low3: cm.low3, low4: cm.low4 }
+      : chart
     const n = D.dates.length
     if (n < 2) return
 
-    const series: [string, string, number][] = [
+    const series: [SeriesKey, string, number][] = [
       ["mid", "#38bdf8", 1.5],
       ["low3", "#22c55e", 1.5],
       ["low4", "#f59e0b", 1.5]
@@ -193,8 +239,8 @@ export default function App() {
     let lo = Infinity
     let hi = -Infinity
     for (const [k] of series) {
-      for (const v of (D as any)[k] || []) {
-        if (v != null) {
+      for (const v of seriesFor(D, k)) {
+        if (v !== null) {
           lo = Math.min(lo, v)
           hi = Math.max(hi, v)
         }
@@ -202,9 +248,11 @@ export default function App() {
     }
     if (cm) {
       for (let i = 0; i < n; i++) {
-        if (cm.h[i] != null) {
-          lo = Math.min(lo, cm.l[i]!)
-          hi = Math.max(hi, cm.h[i]!)
+        const hh = cm.h[i]
+        const ll = cm.l[i]
+        if (hh !== null && ll !== null) {
+          lo = Math.min(lo, ll)
+          hi = Math.max(hi, hh)
         }
       }
     }
@@ -249,14 +297,14 @@ export default function App() {
     }
 
     // Regression bands & close line
-    const colors: Record<string, string> = { close: "#f4f4f5", mid: "#38bdf8", low3: "#22c55e", low4: "#f59e0b" }
+    const colors: Record<SeriesKey, string> = { close: "#f4f4f5", mid: "#38bdf8", low3: "#22c55e", low4: "#f59e0b" }
     for (const [k, , w] of series) {
       ctx.strokeStyle = colors[k]
       ctx.lineWidth = w
       ctx.beginPath()
       let pen = false
-      ;((D as any)[k] || []).forEach((v: number | null, i: number) => {
-        if (v == null) { pen = false; return }
+      seriesFor(D, k).forEach((v, i) => {
+        if (v === null) { pen = false; return }
         const x = X(i), y = Y(v)
         if (!pen) { ctx.moveTo(x, y); pen = true } else ctx.lineTo(x, y)
       })
@@ -303,9 +351,14 @@ export default function App() {
     const cv = canvasRef.current
     const rect = cv.getBoundingClientRect()
     const mx = e.clientX - rect.left
-    const n = chart.dates.length
+    // Candle series is a shorter window than the 6Y series, so derive the hovered
+    // index from the same series the chart is currently drawing.
+    const cm = chartMode === "candle" && chart.candles ? chart.candles : null
+    const dates = cm ? cm.dates : chart.dates
+    const n = dates.length
     const L = 48, R = 52
     const W = rect.width
+    if (n < 2) return
 
     let best = 0
     let bd = 1e9
@@ -316,10 +369,10 @@ export default function App() {
     }
 
     setHoverIndex(best)
-    const date = chart.dates[best]
-    const price = chartMode === "candle" && chart.candles ? chart.candles.c[best] : chart.close[best]
-    const mid = chart.mid[best]
-    const l3 = chart.low3[best]
+    const date = dates[best]
+    const price = (cm ? cm.c : chart.close)[best]
+    const mid = (cm ? cm.mid : chart.mid)[best]
+    const l3 = (cm ? cm.low3 : chart.low3)[best]
 
     setTooltipData({
       x: Math.min(e.clientX - rect.left + 15, rect.width - 160),
@@ -328,7 +381,7 @@ export default function App() {
     })
   }
 
-  const handleCopyPrompt = () => {
+  const handleCopyPrompt = async () => {
     if (!selectedRow) return
     const posTxt = selectedRow.pos != null ? `${selectedRow.pos >= 0 ? "+" : ""}${selectedRow.pos.toFixed(2)}` : "—"
     const prompt = `Fundamental check for ${selectedRow.ticker} at $${selectedRow.price?.toFixed(2) ?? "—"} (${posTxt} σ below trend).\n` +
@@ -336,9 +389,14 @@ export default function App() {
       `(2) Bankruptcy/severe distress risk in 12-24 months? Cover debt, interest coverage, FCF, maturities, dividend.\n` +
       `End with GREEN LIGHT or RED LIGHT + one paragraph of reasoning.`
 
-    navigator.clipboard.writeText(prompt)
-    setCopied(true)
-    setToastMessage("AI check prompt copied to clipboard!")
+    try {
+      await navigator.clipboard.writeText(prompt)
+      setCopied(true)
+      setToastMessage("AI check prompt copied to clipboard!")
+    } catch (err: unknown) {
+      console.error("Clipboard write failed:", err)
+      setToastMessage("Copy failed — select the prompt text manually.")
+    }
     setTimeout(() => {
       setCopied(false)
       setToastMessage(null)
@@ -350,6 +408,37 @@ export default function App() {
     const nyse = new Set(["JPM","XOM","JNJ","UNH","MCD","CRM","MRK","ABBV","KO","WMT","HD","DIS","NKE","CAT","GE","BA","GS","MS","V","MA","IBM","ORCL","LLY"])
     return (nyse.has(t) ? "NYSE:" : "NASDAQ:") + t
   }
+
+  const sortBy = (key: string) => {
+    if (key === sortKey) {
+      setSortDir(-sortDir)
+      return
+    }
+    setSortKey(key)
+    setSortDir(1)
+  }
+
+  const renderSortHead = (label: string, key: string, align = "text-left") => (
+    <TableHead
+      key={key}
+      scope="col"
+      aria-sort={sortKey === key ? (sortDir === 1 ? "ascending" : "descending") : "none"}
+      tabIndex={0}
+      onClick={() => sortBy(key)}
+      onKeyDown={e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          sortBy(key)
+        }
+      }}
+      className={`cursor-pointer select-none ${align}`}
+    >
+      {label}
+      <span aria-hidden="true" className="ml-1 text-muted-foreground">
+        {sortKey === key ? (sortDir === 1 ? "↑" : "↓") : ""}
+      </span>
+    </TableHead>
+  )
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -367,12 +456,26 @@ export default function App() {
           <Badge variant="outline" className="font-mono text-[11px]">
             preset: nova
           </Badge>
-          <span>{data ? `as of ${data.asof}` : "loading..."}</span>
+          <span>{data ? `as of ${data.asof}` : loadError ? "data unavailable" : "loading..."}</span>
         </div>
       </header>
 
       {/* ═══ MAIN DASHBOARD VIEW ═══ */}
       <main className="flex-1 space-y-6 p-6">
+        {loadError && (
+          <Card className="border-destructive/40" role="alert">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base text-destructive">Could not load screener_data.json</CardTitle>
+              <CardDescription className="font-mono text-xs">{loadError}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* KPI CARDS */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
@@ -462,6 +565,8 @@ export default function App() {
             <div className="h-[280px] w-full rounded-md border border-border/40 bg-zinc-950/60 p-2">
               <canvas
                 ref={canvasRef}
+                role="img"
+                aria-label={`σ-channel price chart for ${selectedTicker}`}
                 className="h-full w-full cursor-crosshair"
                 onMouseMove={handleCanvasMouseMove}
                 onMouseLeave={() => { setHoverIndex(-1); setTooltipData(null); }}
@@ -494,9 +599,37 @@ export default function App() {
                   </Tabs>
 
                   <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1" role="group" aria-label="Trend slope filter">
+                      <Button
+                        variant={slopeFilter === "all" ? "default" : "outline"}
+                        size="sm"
+                        aria-pressed={slopeFilter === "all"}
+                        onClick={() => setSlopeFilter("all")}
+                      >
+                        Any Slope
+                      </Button>
+                      <Button
+                        variant={slopeFilter === "up" ? "default" : "outline"}
+                        size="sm"
+                        aria-pressed={slopeFilter === "up"}
+                        onClick={() => setSlopeFilter("up")}
+                      >
+                        Slope ↑
+                      </Button>
+                      <Button
+                        variant={slopeFilter === "down" ? "default" : "outline"}
+                        size="sm"
+                        aria-pressed={slopeFilter === "down"}
+                        onClick={() => setSlopeFilter("down")}
+                      >
+                        Slope ↓
+                      </Button>
+                    </div>
+
                     <div className="relative">
                       <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
                       <Input
+                        aria-label="Search tickers"
                         placeholder="Search ticker..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
@@ -511,13 +644,13 @@ export default function App() {
                   <Table>
                     <TableHeader className="sticky top-0 bg-card z-10">
                       <TableRow>
-                        <TableHead onClick={() => { setSortKey("ticker"); setSortDir(-sortDir) }} className="cursor-pointer">Ticker</TableHead>
-                        <TableHead onClick={() => { setSortKey("price"); setSortDir(-sortDir) }} className="cursor-pointer text-right">Price</TableHead>
-                        <TableHead onClick={() => { setSortKey("pos"); setSortDir(-sortDir) }} className="cursor-pointer text-right">σ Position</TableHead>
-                        <TableHead onClick={() => { setSortKey("buy"); setSortDir(-sortDir) }} className="cursor-pointer text-right">Buy Target</TableHead>
-                        <TableHead onClick={() => { setSortKey("slope_up"); setSortDir(-sortDir) }} className="cursor-pointer text-right">Slope</TableHead>
-                        <TableHead onClick={() => { setSortKey("off52w"); setSortDir(-sortDir) }} className="cursor-pointer text-right">52w Drawdown</TableHead>
-                        <TableHead className="text-right">Signal</TableHead>
+                        {renderSortHead("Ticker", "ticker")}
+                        {renderSortHead("Price", "price", "text-right")}
+                        {renderSortHead("σ Position", "pos", "text-right")}
+                        {renderSortHead("Buy Target", "buy", "text-right")}
+                        {renderSortHead("Slope", "slope_up", "text-right")}
+                        {renderSortHead("52w Drawdown", "off52w", "text-right")}
+                        <TableHead scope="col" className="text-right">Signal</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -526,29 +659,22 @@ export default function App() {
                         const isStier = STIER.has(r.ticker)
                         const buyVal = r.k === 3 ? r.low3 : r.low4
                         const buyPrice = buyVal != null ? `−${r.k}σ @ $${buyVal.toFixed(2)}` : "—"
-                        const sigBadge = r.note?.startsWith("ACTION")
-                          ? <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">ACTION</Badge>
-                          : r.note?.startsWith("WATCH")
-                          ? <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20">WATCH</Badge>
-                          : r.note?.startsWith("SKIP")
-                          ? <Badge variant="destructive">SKIP</Badge>
-                          : <Badge variant="outline">HOLD</Badge>
-
-                        const sdClass = (r.pos != null && r.k != null)
-                          ? (r.pos <= -r.k
-                              ? "text-emerald-500 font-bold"
-                              : r.pos <= -(r.k - 0.5)
-                              ? "text-amber-500 font-semibold"
-                              : r.pos >= 2
-                              ? "text-rose-500"
-                              : "text-foreground")
-                          : "text-foreground"
+                        const sigBadge = signalBadge(r.note)
+                        const sdClass = positionClass(r.pos ?? null, r.k ?? null)
 
                         return (
                           <TableRow
                             key={r.ticker}
+                            tabIndex={0}
+                            data-state={isSelected ? "selected" : undefined}
                             className={`cursor-pointer font-mono text-xs ${isSelected ? "bg-accent/50" : ""}`}
                             onClick={() => setSelectedTicker(r.ticker)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault()
+                                setSelectedTicker(r.ticker)
+                              }
+                            }}
                           >
                             <TableCell className="font-sans font-semibold flex items-center gap-2">
                               {isStier && <span className="size-1.5 rounded-full bg-sky-400" title="S-Tier Top 10" />}
@@ -674,7 +800,11 @@ export default function App() {
 
       {/* TOAST NOTIFICATION */}
       {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-border bg-popover px-4 py-2 text-xs text-popover-foreground shadow-lg flex items-center gap-2">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 z-50 rounded-lg border border-border bg-popover px-4 py-2 text-xs text-popover-foreground shadow-lg flex items-center gap-2"
+        >
           <Check className="size-4 text-emerald-500" />
           <span>{toastMessage}</span>
         </div>

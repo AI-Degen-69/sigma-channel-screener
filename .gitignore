@@ -14,5 +14,8 @@ dist/
 # Logs
 *.log
 
+# Playwright CLI verification artifacts
+.playwright-cli/
+
 # Freebuff & Agent state
 .freebuff/
