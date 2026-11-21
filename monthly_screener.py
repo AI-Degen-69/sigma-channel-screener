@@ -10,9 +10,21 @@ Usage:
   python3 monthly_screener.py --paper-sell META --note "..."
   python3 monthly_screener.py --show-paper
 """
-import sys, os, time, csv, json, datetime as dt
+import sys, os, time, csv, json, math, datetime as dt
 import urllib.request
 import numpy as np
+
+def json_safe(value):
+    """NaN/Infinity are not valid JSON. Emit null so the dashboards show "no value" instead of
+    failing to parse the whole file (e.g. a flat 2500-bar window gives pos = NaN)."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    return value
+
 
 W = 2500
 PERIOD1 = 946684800  # 2000-01-01 UTC
@@ -390,8 +402,11 @@ if __name__ == "__main__":
                 charts[r["ticker"]] = chart_series(r["ticker"], dates, closes, ohl, mid, low3, low4)
             except Exception as e:
                 print(f"  chart series skipped for {r['ticker']}: {e}", flush=True)
+        payload = json_safe({"asof": dt.date.today().isoformat(), "rows": rows, "charts": charts})
         with open(DATA_JSON, "w", encoding="utf-8") as f:
-            json.dump({"asof": dt.date.today().isoformat(), "rows": rows, "charts": charts}, f)
+            # allow_nan=False turns any leftover NaN/Infinity into a loud failure instead of
+            # invalid JSON that every dashboard fails to parse.
+            json.dump(payload, f, allow_nan=False)
         print(md)
         print("Wrote screener_latest.md + screener_data.json", flush=True)
         ledger_ensure()

@@ -41,25 +41,45 @@ python monthly_screener.py --show-paper
 |---|---|
 | `screener_latest.md` | Human-readable screen table + AI-check prompts |
 | `screener_data.json` | Machine-readable screen data + chart series for the dashboard |
-| `index.html` | Interactive local dashboard — current UI, served over HTTP after each run |
+| `index.html` / `src/` | Modern shadcn/ui dashboard (React 19 + Tailwind CSS v4 + Vite) |
+| `index.vanilla.html` | Standalone single-page dashboard — zero build required, run via HTTP |
 | `dashboard.html` | Earlier dashboard version, same data — kept for reference |
 | `paper_trades.csv` | Paper-trade ledger (BUY/SELL with price, σ position, thesis note) |
 
-## Dashboard
+## Dashboards
 
-The dashboard loads `screener_data.json` with `fetch`, which browsers block on `file://` origins, so serve the folder instead of double-clicking the file:
+### 1. Modern shadcn/ui Dashboard (Recommended)
+
+Built with React 19, TypeScript, Tailwind CSS v4, and canonical `shadcn/ui` components (`nova` preset). It must be run through Vite — `index.html` loads TypeScript and TSX sources directly, so a plain static file server only shows a blank page.
+
+Vite serves the repository-root `screener_data.json`, so `python monthly_screener.py --refresh` is picked up by both dashboards without copying any file.
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start development server
+pnpm dev
+
+# Build and preview production release
+pnpm build
+pnpm preview
+```
+
+### 2. Standalone Single-Page Dashboards (Zero-Build)
+
+`index.vanilla.html` and `dashboard.html` load `screener_data.json` directly. Because browsers block cross-origin requests on `file://`, serve over HTTP:
 
 ```bash
 python -m http.server 8000
-# then open http://localhost:8000/index.html
+# Then open http://localhost:8000/index.vanilla.html
 ```
 
-`dashboard.html` is the earlier version of the same dashboard (open `http://localhost:8000/dashboard.html`). Features:
-
-- Sortable/filterable table with color-coded σ position, P/E, slope, and 52-week drawdown
-- Per-stock σ-band chart (trend line view + daily candlestick view)
-- Embedded TradingView live chart
-- One-click copy of the AI fundamental-check prompt
+### Key Features
+- **4-Card KPI Header:** Total screened universe, action signals (S-Tier ≤ −3σ / Standard ≤ −4σ), radar watch, and deepest discount leader.
+- **Sortable & Filterable Table:** Instant ticker search, signal/tier tabs, slope toggles, and σ discount rank.
+- **Dual Visual Inspection:** Custom canvas σ-regression channel & candlestick view alongside live interactive TradingView chart.
+- **One-Click AI Strategy Prompt:** Pre-populated fundamental verification prompt ready for LLM sanity checks.
 
 ## TradingView indicator
 
@@ -75,6 +95,7 @@ python -m http.server 8000
 
 - Python 3.10+
 - NumPy
+- Node.js 20+ and pnpm (modern dashboard only)
 - Network access to Yahoo Finance (price history)
 - Optional: `opencli eastmoney` for live MCap/P-E/P-B quotes
 
