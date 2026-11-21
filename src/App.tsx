@@ -16,7 +16,6 @@ import {
   TableBody,
   TableCell
 } from "@/components/ui/table"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Search, Copy, Check } from "lucide-react"
@@ -84,7 +83,10 @@ const seriesFor = (series: ChartSeries, key: SeriesKey): (number | null)[] => {
 }
 
 const sortValue = (row: ScreenerRow, key: string): number | string | null => {
-  if (key === "buy") return row.k === 3 ? row.low3 : row.low4
+  if (key === "buy") {
+    const target = row.k === 3 ? row.low3 : row.low4
+    return typeof target === "number" ? target : null
+  }
   const raw: unknown = (row as unknown as Record<string, unknown>)[key]
   if (typeof raw === "boolean") return raw ? 1 : 0
   if (typeof raw === "number" || typeof raw === "string") return raw
@@ -115,6 +117,22 @@ const positionClass = (pos: number | null, k: number | null): string => {
   return "text-foreground"
 }
 
+const fmtPrice = (v: number | null | undefined): string => (v == null ? "—" : `$${v.toFixed(2)}`)
+
+const TABLE_FILTERS = [
+  { value: "all", label: "All Tickers" },
+  { value: "sig", label: "Action + Watch" },
+  { value: "tier", label: "S-Tier Only" }
+]
+
+const buildPrompt = (row: ScreenerRow): string => {
+  const posTxt = row.pos != null ? `${row.pos >= 0 ? "+" : ""}${row.pos.toFixed(2)}σ` : "—"
+  return `Fundamental check for ${row.ticker} at ${fmtPrice(row.price)} (${posTxt} below trend).\n` +
+    `With web search on, answer ONLY:\n(1) TEMPORARY recoverable dip or PERMANENT damage? Cite the cause + 2-3 recent sources.\n` +
+    `(2) Bankruptcy/severe distress risk in 12-24 months? Cover debt, interest coverage, FCF, maturities, dividend.\n` +
+    `End with GREEN LIGHT or RED LIGHT + one paragraph of reasoning.`
+}
+
 export default function App() {
   const [data, setData] = React.useState<ScreenerData | null>(null)
   const [selectedTicker, setSelectedTicker] = React.useState<string>("MCD")
@@ -124,9 +142,10 @@ export default function App() {
   const [sortKey, setSortKey] = React.useState<string>("pos")
   const [sortDir, setSortDir] = React.useState<number>(1)
   const [chartMode, setChartMode] = React.useState<"line" | "candle">("line")
-  const [copied, setCopied] = React.useState<boolean>(false)
+  const [copiedTicker, setCopiedTicker] = React.useState<string | null>(null)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null)
   const [loadError, setLoadError] = React.useState<string | null>(null)
+  const toastTimer = React.useRef<number | null>(null)
 
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
   const [hoverIndex, setHoverIndex] = React.useState<number>(-1)
@@ -141,6 +160,9 @@ export default function App() {
       })
       .then((d: ScreenerData) => {
         if (cancelled) return
+        if (!Array.isArray(d.rows) || typeof d.charts !== "object" || d.charts === null) {
+          throw new Error("Screener data has an unexpected shape")
+        }
         setData(d)
         // Select deepest discount
         if (d.rows && d.rows.length > 0) {
@@ -162,13 +184,26 @@ export default function App() {
     return data?.rows.find(r => r.ticker === selectedTicker) || null
   }, [data, selectedTicker])
 
+  const activeChart = data?.charts[selectedTicker] ?? null
+  const candlesAvailable = Boolean(activeChart?.candles)
+  const candleSeries = chartMode === "candle" && activeChart?.candles ? activeChart.candles : null
+
+  // Candle data is optional per ticker; fall back to the trend view when it is missing.
+  React.useEffect(() => {
+    if (chartMode === "candle" && !candlesAvailable) setChartMode("line")
+  }, [chartMode, candlesAvailable])
+
+  React.useEffect(() => () => {
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
+  }, [])
+
   const filteredRows = React.useMemo(() => {
     if (!data) return []
     return data.rows.filter(r => {
       if (activeTab === "sig" && !/^(ACTION|WATCH)/.test(r.note || "")) return false
       if (activeTab === "tier" && !STIER.has(r.ticker)) return false
-      if (slopeFilter === "up" && !r.slope_up) return false
-      if (slopeFilter === "down" && r.slope_up) return false
+      if (slopeFilter === "up" && r.slope_up !== true) return false
+      if (slopeFilter === "down" && r.slope_up !== false) return false
       if (searchQuery) {
         const q = searchQuery.toUpperCase()
         if (!r.ticker.includes(q) && !(r.note || "").toUpperCase().includes(q)) return false
@@ -206,7 +241,13 @@ export default function App() {
   const renderChart = React.useCallback((t: string, hover: number = -1) => {
     if (!data || !canvasRef.current) return
     const chart = data.charts[t]
-    if (!chart) return
+    if (!chart) {
+      // Clear the previous ticker's plot so it cannot sit under the new title.
+      const cv0 = canvasRef.current
+      const ctx0 = cv0.getContext("2d")
+      if (ctx0) ctx0.clearRect(0, 0, cv0.width, cv0.height)
+      return
+    }
 
     const cv = canvasRef.current
     const ctx = cv.getContext("2d")
@@ -338,9 +379,14 @@ export default function App() {
   }, [data, chartMode])
 
   React.useEffect(() => {
-    if (selectedTicker) {
-      renderChart(selectedTicker, hoverIndex)
-    }
+    if (!selectedTicker) return
+    renderChart(selectedTicker, hoverIndex)
+    // A window resize changes the canvas width without changing any dependency.
+    const cv = canvasRef.current
+    if (!cv || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(() => renderChart(selectedTicker, hoverIndex))
+    observer.observe(cv)
+    return () => observer.disconnect()
   }, [selectedTicker, chartMode, hoverIndex, renderChart])
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -383,29 +429,61 @@ export default function App() {
 
   const handleCopyPrompt = async () => {
     if (!selectedRow) return
-    const posTxt = selectedRow.pos != null ? `${selectedRow.pos >= 0 ? "+" : ""}${selectedRow.pos.toFixed(2)}` : "—"
-    const prompt = `Fundamental check for ${selectedRow.ticker} at $${selectedRow.price?.toFixed(2) ?? "—"} (${posTxt} σ below trend).\n` +
-      `With web search on, answer ONLY:\n(1) TEMPORARY recoverable dip or PERMANENT damage? Cite the cause + 2-3 recent sources.\n` +
-      `(2) Bankruptcy/severe distress risk in 12-24 months? Cover debt, interest coverage, FCF, maturities, dividend.\n` +
-      `End with GREEN LIGHT or RED LIGHT + one paragraph of reasoning.`
-
     try {
-      await navigator.clipboard.writeText(prompt)
-      setCopied(true)
+      await navigator.clipboard.writeText(buildPrompt(selectedRow))
+      setCopiedTicker(selectedRow.ticker)
       setToastMessage("AI check prompt copied to clipboard!")
     } catch (err: unknown) {
       console.error("Clipboard write failed:", err)
       setToastMessage("Copy failed — select the prompt text manually.")
     }
-    setTimeout(() => {
-      setCopied(false)
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => {
+      setCopiedTicker(null)
       setToastMessage(null)
     }, 2500)
   }
 
+  const handleCanvasKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (!activeChart) return
+    const total = (candleSeries ? candleSeries.dates : activeChart.dates).length
+    if (total === 0) return
+    const from = hoverIndex < 0 ? total - 1 : hoverIndex
+    const targets: Record<string, number> = {
+      ArrowLeft: from - 1,
+      ArrowRight: from + 1,
+      Home: 0,
+      End: total - 1
+    }
+    const next = targets[e.key]
+    if (next === undefined) return
+    e.preventDefault()
+    setHoverIndex(Math.min(total - 1, Math.max(0, next)))
+  }
+
+  const chartReadout = React.useMemo(() => {
+    if (!activeChart || hoverIndex < 0) return ""
+    const dates = candleSeries ? candleSeries.dates : activeChart.dates
+    if (hoverIndex >= dates.length) return ""
+    const px = candleSeries ? candleSeries.c : activeChart.close
+    const mid = candleSeries ? candleSeries.mid : activeChart.mid
+    const l3 = candleSeries ? candleSeries.low3 : activeChart.low3
+    const l4 = candleSeries ? candleSeries.low4 : activeChart.low4
+    const parts = [dates[hoverIndex], `close ${fmtPrice(px[hoverIndex])}`,
+      `mid ${fmtPrice(mid[hoverIndex])}`, `−3σ ${fmtPrice(l3[hoverIndex])}`,
+      `−4σ ${fmtPrice(l4[hoverIndex])}`]
+    if (candleSeries) {
+      parts.push(`open ${fmtPrice(candleSeries.o[hoverIndex])}`,
+        `high ${fmtPrice(candleSeries.h[hoverIndex])}`,
+        `low ${fmtPrice(candleSeries.l[hoverIndex])}`)
+    }
+    return parts.join(" · ")
+  }, [activeChart, candleSeries, hoverIndex])
+
   const tvSymbol = (t: string) => {
     if (t === "BRK-B") return "NYSE:BRK.B"
-    const nyse = new Set(["JPM","XOM","JNJ","UNH","MCD","CRM","MRK","ABBV","KO","WMT","HD","DIS","NKE","CAT","GE","BA","GS","MS","V","MA","IBM","ORCL","LLY"])
+    // WMT left NYSE for NASDAQ on 2025-12-09, so it intentionally falls through to NASDAQ.
+    const nyse = new Set(["JPM","XOM","JNJ","UNH","MCD","CRM","MRK","ABBV","KO","HD","DIS","NKE","CAT","GE","BA","GS","MS","V","MA","IBM","ORCL","LLY"])
     return (nyse.has(t) ? "NYSE:" : "NASDAQ:") + t
   }
 
@@ -555,6 +633,8 @@ export default function App() {
               <Button
                 variant={chartMode === "candle" ? "default" : "outline"}
                 size="sm"
+                disabled={!candlesAvailable}
+                title={candlesAvailable ? undefined : "No candle data for this ticker"}
                 onClick={() => setChartMode("candle")}
               >
                 Candles (2Y)
@@ -562,16 +642,28 @@ export default function App() {
             </div>
           </CardHeader>
           <CardContent className="relative px-4 pb-4">
-            <div className="h-[280px] w-full rounded-md border border-border/40 bg-zinc-950/60 p-2">
+            <div className="relative h-[280px] w-full rounded-md border border-border/40 bg-zinc-950/60 p-2">
               <canvas
                 ref={canvasRef}
                 role="img"
-                aria-label={`σ-channel price chart for ${selectedTicker}`}
-                className="h-full w-full cursor-crosshair"
+                tabIndex={0}
+                aria-label={`σ-channel price chart for ${selectedTicker}. Use the arrow keys to inspect daily values.`}
+                aria-describedby="chart-readout"
+                className="h-full w-full cursor-crosshair focus-visible:outline-2 focus-visible:outline-ring"
                 onMouseMove={handleCanvasMouseMove}
                 onMouseLeave={() => { setHoverIndex(-1); setTooltipData(null); }}
+                onKeyDown={handleCanvasKeyDown}
+                onBlur={() => setHoverIndex(-1)}
               />
+              {data && !activeChart && (
+                <div className="pointer-events-none absolute inset-2 flex items-center justify-center rounded bg-zinc-950/90 text-xs text-muted-foreground">
+                  No chart data available for {selectedTicker}
+                </div>
+              )}
             </div>
+            <p id="chart-readout" aria-live="polite" className="mt-1 min-h-4 font-mono text-[11px] text-muted-foreground">
+              {chartReadout}
+            </p>
             {tooltipData && (
               <div
                 className="pointer-events-none absolute z-20 rounded bg-popover px-2.5 py-1 text-xs font-mono text-popover-foreground shadow-md border border-border"
@@ -590,13 +682,19 @@ export default function App() {
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList>
-                      <TabsTrigger value="all">All Tickers</TabsTrigger>
-                      <TabsTrigger value="sig">Action + Watch</TabsTrigger>
-                      <TabsTrigger value="tier">S-Tier Only</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                  <div className="flex items-center gap-1" role="group" aria-label="Signal filter">
+                    {TABLE_FILTERS.map(f => (
+                      <Button
+                        key={f.value}
+                        size="sm"
+                        variant={activeTab === f.value ? "default" : "outline"}
+                        aria-pressed={activeTab === f.value}
+                        onClick={() => setActiveTab(f.value)}
+                      >
+                        {f.label}
+                      </Button>
+                    ))}
+                  </div>
 
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1" role="group" aria-label="Trend slope filter">
@@ -777,12 +875,12 @@ export default function App() {
                         AI Fundamental Check
                       </span>
                       <Button variant="ghost" size="sm" onClick={handleCopyPrompt} className="h-6 px-2 text-[11px] gap-1">
-                        {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
-                        {copied ? "Copied" : "Copy"}
+                        {copiedTicker === selectedTicker ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
+                        {copiedTicker === selectedTicker ? "Copied" : "Copy"}
                       </Button>
                     </div>
-                    <pre className="text-[11px] text-zinc-400 font-mono whitespace-pre-wrap leading-relaxed">
-                      {`Fundamental check for ${selectedRow.ticker} at $${selectedRow.price?.toFixed(2) ?? "—"} (${selectedRow.pos != null ? `${selectedRow.pos >= 0 ? "+" : ""}${selectedRow.pos.toFixed(2)}σ` : "—"} below trend).`}
+                    <pre className="text-[11px] text-zinc-400 font-mono whitespace-pre-wrap leading-relaxed select-all">
+                      {buildPrompt(selectedRow)}
                     </pre>
                   </div>
                 </CardContent>

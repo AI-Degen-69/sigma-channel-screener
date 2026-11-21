@@ -611,7 +611,7 @@ function verdict(r) {
 function money(v) { return v ? "$" + Math.round(v / 1e9) + "B" : "n/a"; }
 
 function sdClass(r) {
-  if (r.pos === undefined) return "";
+  if (typeof r.pos !== "number") return "";
   if (r.pos <= -r.k)         return "c-green";
   if (r.pos <= -(r.k - 0.5)) return "c-amber";
   if (r.pos >= 2)            return "c-red";
@@ -630,18 +630,18 @@ function peClass(v) {
   return "c-red";
 }
 function slopeClass(r) {
-  if (r.pos === undefined) return "";
+  if (typeof r.pos !== "number") return "";
   return r.slope_up ? "c-green" : "c-red";
 }
 function sigRank(r) { return { ACTION: 0, WATCH: 1, HOLD: 2, SKIP: 3 }[cat(r)]; }
-function buyVal(r) { return r.pos === undefined ? null : (r.k === 3 ? r.low3 : r.low4); }
+function buyVal(r) { return typeof r.pos !== "number" ? null : (r.k === 3 ? r.low3 : r.low4); }
 function cellVal(r, k) {
   switch (k) {
     case "ticker": return r.ticker;
     case "price":  return r.price;
     case "pos":    return r.pos;
     case "buy":    return buyVal(r);
-    case "slope":  return r.pos === undefined ? null : (r.slope_up ? 1 : 0);
+    case "slope":  return typeof r.pos !== "number" ? null : (r.slope_up ? 1 : 0);
     case "mcap":   return r.mcap;
     case "pe":     return r.pe;
     case "off52w": return r.off52w;
@@ -679,7 +679,7 @@ async function load() {
     else if (c === "WATCH") nWatch++;
     else if (c === "SKIP") nSkip++;
     else nHold++;
-    if (r.pos !== undefined && (mostUnder === null || r.pos < mostUnder.pos)) mostUnder = r;
+    if (typeof r.pos === "number" && (mostUnder === null || r.pos < mostUnder.pos)) mostUnder = r;
   }
   $("sTotal").textContent = rows.length;
   $("sAction").textContent = nAction;
@@ -706,8 +706,8 @@ function filtered() {
     if (MODE === "sig" && c !== "ACTION" && c !== "WATCH") return false;
     if (MODE === "tier" && !isSTier(r)) return false;
     if (SIG && SIG.toUpperCase() !== c) return false;
-    if (SLOPE === "up" && !(r.pos !== undefined && r.slope_up)) return false;
-    if (SLOPE === "down" && !(r.pos !== undefined && !r.slope_up)) return false;
+    if (SLOPE === "up" && !(typeof r.pos === "number" && r.slope_up === true)) return false;
+    if (SLOPE === "down" && !(typeof r.pos === "number" && r.slope_up === false)) return false;
     if (Q && !(r.ticker.includes(Q) || (r.note || "").toUpperCase().includes(Q))) return false;
     return true;
   });
@@ -729,7 +729,7 @@ function paint() {
   const list = filtered();
   for (const r of list) {
     const [v, cls] = verdict(r);
-    const buy = r.pos === undefined ? "—" : ("−" + r.k + "σ @ " + (r.k === 3 ? r.low3 : r.low4).toFixed(2));
+    const buy = typeof r.pos !== "number" ? "—" : ("−" + r.k + "σ @ " + (r.k === 3 ? r.low3 : r.low4).toFixed(2));
     const tr = document.createElement("tr");
     if (r.ticker === SEL) tr.className = "selected";
     tr.tabIndex = 0;
@@ -738,9 +738,9 @@ function paint() {
     tr.innerHTML =
       `<td class="ticker-cell">${tierDot}<span>${r.ticker}</span></td>` +
       `<td>${r.price.toFixed(2)}</td>` +
-      `<td class="${sdClass(r)}">${r.pos === undefined ? "—" : r.pos.toFixed(2) + "σ"}</td>` +
+      `<td class="${sdClass(r)}">${typeof r.pos !== "number" ? "—" : r.pos.toFixed(2) + "σ"}</td>` +
       `<td>${buy}</td>` +
-      `<td class="${slopeClass(r)}">${r.pos === undefined ? "—" : (r.slope_up ? "↑ up" : "↓ flat")}</td>` +
+      `<td class="${slopeClass(r)}">${typeof r.pos !== "number" ? "—" : (r.slope_up ? "↑ up" : "↓ flat")}</td>` +
       `<td>${money(r.mcap)}</td>` +
       `<td class="${peClass(r.pe)}">${r.pe ? r.pe.toFixed(1) : "n/a"}</td>` +
       `<td class="${offClass(r.off52w)}">${r.off52w === undefined ? "—" : (r.off52w * 100).toFixed(1) + "%"}</td>` +
@@ -771,7 +771,8 @@ function focusSelectedRow() {
    DETAIL SELECTION
    ═══════════════════════════════════════════════════ */
 function promptFor(r) {
-  return `Fundamental check for ${r.ticker} at $${r.price.toFixed(2)} (${r.pos >= 0 ? "+" : ""}${r.pos.toFixed(2)} σ vs the regression mid-line). ` +
+  const posTxt = typeof r.pos === "number" ? `${r.pos >= 0 ? "+" : ""}${r.pos.toFixed(2)} σ` : "n/a";
+  return `Fundamental check for ${r.ticker} at $${r.price.toFixed(2)} (${posTxt} vs the regression mid-line). ` +
     `With web search on, answer ONLY: (1) TEMPORARY recoverable dip or PERMANENT damage? Cite the cause + 2-3 recent sources. ` +
     `(2) Bankruptcy/severe distress risk in 12-24 months? Cover debt, interest coverage, FCF, maturities, dividend. ` +
     `End with GREEN LIGHT or RED LIGHT + one paragraph of reasoning.`;
@@ -781,7 +782,7 @@ function select(t) {
   SEL = t;
   const r = DATA.rows.find(x => x.ticker === t);
   if (!r) return;
-  const hasPos = r.pos !== undefined; // false for names without a full 2500-bar channel (e.g. PLTR)
+  const hasPos = typeof r.pos === "number"; // false for names without a full 2500-bar channel (e.g. PLTR)
 
   $("detailEmpty").style.display = "none";
   $("detailContent").style.display = "block";
@@ -860,10 +861,13 @@ function readoutFor(i) {
   const { D, cm } = BAND;
   const px = priceAt(D, cm, i), m = D.mid[i], l3 = D.low3[i], l4 = D.low4 ? D.low4[i] : null, s = sdAt(D, i);
   const pos = (px != null && m != null && s) ? (px - m) / s : null;
-  const parts = [D.dates[i], "close " + (px == null ? "—" : px.toFixed(2)),
-    "mid " + (m == null ? "—" : m.toFixed(2)),
-    "−3σ " + (l3 == null ? "—" : l3.toFixed(2)),
-    "−4σ " + (l4 == null ? "—" : l4.toFixed(2))];
+  const f = v => (v == null ? "—" : v.toFixed(2));
+  const parts = [D.dates[i], "close " + f(px),
+    "mid " + f(m),
+    "−3σ " + f(l3),
+    "−4σ " + f(l4)];
+  // The pointer tooltip shows OHLC in candle mode; keyboard users need the same fields.
+  if (cm) parts.push("open " + f(cm.o[i]), "high " + f(cm.h[i]), "low " + f(cm.l[i]));
   if (pos != null) parts.push((pos >= 0 ? "+" : "") + pos.toFixed(2) + "σ");
   return parts.join(" · ");
 }

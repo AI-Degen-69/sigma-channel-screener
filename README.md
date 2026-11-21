@@ -50,14 +50,9 @@ python monthly_screener.py --show-paper
 
 ### 1. Modern shadcn/ui Dashboard (Recommended)
 
-The dashboard loads `screener_data.json` with `fetch`, which browsers block on `file://` origins, so serve the folder instead of double-clicking the file:
+Built with React 19, TypeScript, Tailwind CSS v4, and canonical `shadcn/ui` components (`nova` preset). It must be run through Vite — `index.html` loads TypeScript and TSX sources directly, so a plain static file server only shows a blank page.
 
-```bash
-python -m http.server 8000
-# then open http://localhost:8000/index.html
-```
-
-Built with React 19, TypeScript, Tailwind CSS v4, and canonical `shadcn/ui` components (`nova` preset).
+Vite serves the repository-root `screener_data.json`, so `python monthly_screener.py --refresh` is picked up by both dashboards without copying any file.
 
 ```bash
 # Install dependencies
