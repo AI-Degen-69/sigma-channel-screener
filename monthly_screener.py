@@ -199,6 +199,28 @@ def live_mcaps(tickers):
     return out
 
 
+def classify_channel(price, mid, std, low3, low4, slope_up, k):
+    """Return {"pos": float, "note": str, "signal": str} for one screened row."""
+    pos = float((price - mid) / std) if std > 0 else float("nan")
+    band = low3 if k == 3 else low4
+    if not slope_up:
+        note = "SKIP: channel flat/down (no 10y growth)"
+        signal = "skip_flat"
+    elif (low3 <= 0) or (k == 4 and low4 <= 0):
+        note = "SKIP: -3/-4 band below zero"
+        signal = "skip_band"
+    elif price <= band:
+        note = f"ACTION: at/below -{k}σ ({'S-tier' if k == 3 else 'standard'}) — run AI check, 5-10% size"
+        signal = "action"
+    elif pos <= -(k - 0.5):
+        note = f"WATCH: near -{k}σ ({pos:+.2f}σ) — prepare thesis"
+        signal = "watch"
+    else:
+        note = "hold/cash - no signal"
+        signal = "hold"
+    return {"pos": pos, "note": note, "signal": signal}
+
+
 def ai_prompt(ticker, price, pos):
     return (f"Fundamental check for {ticker} at ${price:.2f} ({pos:+.2f} σ below trend). "
             f"With web search on, answer ONLY: (1) TEMPORARY recoverable dip or PERMANENT damage? "
@@ -229,24 +251,15 @@ def screen(force=False):
             entry["note"] = f"SKIP: only {len(dates)} bars < 2500 (need 10y history)"
             rows.append(entry)
             continue
-        pos = (closes[i] - mid[i]) / std[i] if std[i] > 0 else float("nan")
-        up = slope[i] > 0
+        up = bool(slope[i] > 0)
         k = 3 if t in SIER_TOP10 else 4
-        band = low3[i] if k == 3 else low4[i]
         off_high = closes[i] / closes[max(0, i - 252):i + 1].max() - 1
-        if not up:
-            note = "SKIP: channel flat/down (no 10y growth)"
-        elif (low3[i] <= 0) or (k == 4 and low4[i] <= 0):
-            note = "SKIP: -3/-4 band below zero"
-        elif closes[i] <= band:
-            note = f"ACTION: at/below -{k}σ ({'S-tier' if k == 3 else 'standard'}) — run AI check, 5-10% size"
-        elif pos <= -(k - 0.5):
-            note = f"WATCH: near -{k}σ ({pos:+.2f}σ) — prepare thesis"
-        else:
-            note = "hold/cash — no signal"
+        verdict = classify_channel(float(closes[i]), float(mid[i]), float(std[i]),
+                                   float(low3[i]), float(low4[i]), up, k)
         entry.update(mid=float(mid[i]), sd=float(std[i]), low3=float(low3[i]),
-                     low4=float(low4[i]), slope_up=bool(up), pos=float(pos),
-                     k=k, off52w=float(off_high), note=note)
+                     low4=float(low4[i]), slope_up=up, pos=verdict["pos"],
+                     k=k, off52w=float(off_high), note=verdict["note"],
+                     signal=verdict["signal"])
         rows.append(entry)
     rows.sort(key=lambda r: r.get("pos", 99))
     return rows
