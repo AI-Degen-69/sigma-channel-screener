@@ -51,4 +51,5 @@ All tests pass. Run it from the repo root.
 ## Notes
 
 - `W`, `SIER_TOP10`, and `k` selection stay where they are. Pass `k` in.
-- The note strings are asserted by prefix, so keep the existing wording exactly.
+- The note strings are asserted by prefix, so keep the existing wording. One exception: the
+  `hold/cash` note is written with a hyphen, not the long dash the old code used.
