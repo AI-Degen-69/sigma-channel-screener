@@ -26,53 +26,31 @@ python monthly_screener.py
 
 # Force-refresh all price data from Yahoo Finance
 python monthly_screener.py --refresh
-
-# Log a paper trade
-python monthly_screener.py --paper-buy MCD --note "green light: ..."
-python monthly_screener.py --paper-sell META --note "thesis broke"
-
-# View paper-trade ledger
-python monthly_screener.py --show-paper
 ```
 
 ### Output
 
 | File | Purpose |
 |---|---|
-| `screener_latest.md` | Human-readable screen table + AI-check prompts |
-| `screener_data.json` | Machine-readable screen data + chart series for the dashboard |
-| `index.html` / `src/` | Modern shadcn/ui dashboard (React 19 + Tailwind CSS v4 + Vite) |
-| `index.vanilla.html` | Standalone single-page dashboard — zero build required, run via HTTP |
-| `dashboard.html` | Earlier dashboard version, same data — kept for reference |
-| `paper_trades.csv` | Paper-trade ledger (BUY/SELL with price, σ position, thesis note) |
+| `screener_data.json` | Screen data + chart series for the dashboard |
+| `index.html` / `src/` | Dashboard (React 19 + Tailwind CSS v4 + Vite) |
 
-## Dashboards
+## Dashboard
 
-### 1. Modern shadcn/ui Dashboard (Recommended)
+The dashboard is the React 19 + TypeScript + Tailwind CSS v4 app in `src/`, served by Vite from `index.html` with canonical `shadcn/ui` components (`nova` preset). It must run through Vite — `index.html` loads TypeScript and TSX sources directly, so a plain static file server only shows a blank page.
 
-Built with React 19, TypeScript, Tailwind CSS v4, and canonical `shadcn/ui` components (`nova` preset). It must be run through Vite — `index.html` loads TypeScript and TSX sources directly, so a plain static file server only shows a blank page.
-
-Vite serves the repository-root `screener_data.json`, so `python monthly_screener.py --refresh` is picked up by both dashboards without copying any file.
+Vite serves the repository-root `screener_data.json`, so `python monthly_screener.py --refresh` is picked up without copying any file.
 
 ```bash
 # Install dependencies
 pnpm install
 
 # Start development server
-pnpm dev
+pnpm dev              # http://localhost:5173
 
 # Build and preview production release
 pnpm build
 pnpm preview
-```
-
-### 2. Standalone Single-Page Dashboards (Zero-Build)
-
-`index.vanilla.html` and `dashboard.html` load `screener_data.json` directly. Because browsers block cross-origin requests on `file://`, serve over HTTP:
-
-```bash
-python -m http.server 8000
-# Then open http://localhost:8000/index.vanilla.html
 ```
 
 ### Key Features
@@ -80,16 +58,6 @@ python -m http.server 8000
 - **Sortable & Filterable Table:** Instant ticker search, signal/tier tabs, slope toggles, and σ discount rank.
 - **Dual Visual Inspection:** Custom canvas σ-regression channel & candlestick view alongside live interactive TradingView chart.
 - **One-Click AI Strategy Prompt:** Pre-populated fundamental verification prompt ready for LLM sanity checks.
-
-## TradingView indicator
-
-`sd_channel_2500.pine` — paste into Pine Editor to overlay the exact same channel on any TradingView daily chart. Math matches `rolling_channel()` in the Python screener.
-
-> **Note:** TradingView uses split-adjusted close (not dividend-adjusted). On dividend payers the bands sit slightly lower than the screener's Yahoo adj-close bands. Non-payers match exactly.
-
-## Strategy verification
-
-`verify_strategy.py` + `VERIFY_REPORT.md` — independent re-implementation and fact-check of the video's four named trades and benchmark claims. See the report for what checks out and what doesn't.
 
 ## Dependencies
 
@@ -101,4 +69,4 @@ python -m http.server 8000
 
 ## Disclaimer
 
-This is a paper-trading research tool, not financial advice. Past performance does not guarantee future results. The 899% headline claim from the video is unverifiable — see `VERIFY_REPORT.md` for details.
+This is a research tool, not financial advice. Past performance does not guarantee future results. The 899% headline claim from the video is unverifiable.

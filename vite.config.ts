@@ -6,9 +6,9 @@ import tailwindcss from '@tailwindcss/vite'
 
 const dataFile = fileURLToPath(new URL('./screener_data.json', import.meta.url))
 
-// monthly_screener.py writes screener_data.json next to the standalone dashboard, but Vite only
-// serves public/. Serve that generated snapshot directly in dev and emit the same file in builds,
-// so there is a single source of truth and a refresh can never leave a stale copy behind.
+// monthly_screener.py writes screener_data.json at the repo root, but Vite only serves public/.
+// Serve that generated snapshot directly in dev and emit the same file in builds, so there is a
+// single source of truth and a refresh can never leave a stale copy behind.
 function screenerData(): Plugin {
   return {
     name: 'screener-data',

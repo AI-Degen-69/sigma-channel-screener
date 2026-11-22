@@ -4,13 +4,10 @@ Rules: 2500-day regression channel, -3σ for S-tier top-10, -4σ for others.
 Filters: 10y history, slope up, band > 0. Fundamental check is manual.
 
 Usage:
-  python3 monthly_screener.py                 # screen (uses cache), writes screener_latest.md + screener_data.json
+  python3 monthly_screener.py                 # screen (uses cache), writes screener_data.json
   python3 monthly_screener.py --refresh       # force fresh Yahoo download (ignores price cache)
-  python3 monthly_screener.py --paper-buy MCD --note "green light: ..."
-  python3 monthly_screener.py --paper-sell META --note "..."
-  python3 monthly_screener.py --show-paper
 """
-import sys, os, time, csv, json, math, datetime as dt
+import sys, os, time, json, math, datetime as dt
 import urllib.request
 import numpy as np
 
@@ -30,7 +27,6 @@ W = 2500
 PERIOD1 = 946684800  # 2000-01-01 UTC
 UA = {'User-Agent': 'Mozilla/5.0'}
 HERE = os.path.dirname(os.path.abspath(__file__))
-LEDGER = os.path.join(HERE, "paper_trades.csv")
 CACHE_DIR = os.path.join(HERE, ".cache", "prices")
 QUOTE_CACHE = os.path.join(HERE, ".cache", "quotes.json")
 DATA_JSON = os.path.join(HERE, "screener_data.json")
@@ -319,94 +315,29 @@ def render(rows):
               f"Price ${r['price']:.2f} on {r['date']}, {r['pos']:+.2f}σ, mid-line target ${r['mid']:.2f} "
               f"(+{r['mid'] / r['price'] - 1:.0%} to regression). 1y off-high {r['off52w']:+.1%}.", "",
               "AI check prompt (paste to your AI with web search on):",
-              f"> {ai_prompt(r['ticker'], r['price'], r['pos'])}", "",
-              f"Paper log: `python3 monthly_screener.py --paper-buy {r['ticker']} --note \"green light: ...\"`", ""]
-    L += ["## Paper-trade ledger",
-          "See `paper_trades.csv`. Log every BUY/SELL with price + thesis note; "
-          "re-run the AI check quarterly; sell at loss only if the thesis breaks."]
+              f"> {ai_prompt(r['ticker'], r['price'], r['pos'])}", ""]
     return "\n".join(L) + "\n"
 
 
-def ledger_ensure():
-    if not os.path.exists(LEDGER):
-        with open(LEDGER, "w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(["date", "ticker", "action", "price", "sd_pos", "note"])
-
-
-def paper_log(action, ticker, note):
-    ticker = ticker.upper()
-    dates, closes, _ = fetch(ticker)
-    mid, std, low3, *_ = rolling_channel(closes)
-    i = len(dates) - 1
-    pos = f"{(closes[i] - mid[i]) / std[i]:+.2f}" if not np.isnan(low3[i]) and std[i] else ""
-    ledger_ensure()
-    with open(LEDGER, "a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow([dates[i], ticker, action, f"{closes[i]:.2f}", pos, note or ""])
-    print(f"Logged {action} {ticker} @ {closes[i]:.2f} ({dates[i]})", flush=True)
-
-
-def show_paper():
-    ledger_ensure()
-    with open(LEDGER, encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
-    if not rows:
-        print('Ledger empty. Log a trade: python3 monthly_screener.py --paper-buy MCD --note "..."')
-        return
-    print(f"{'date':10} {'ticker':6} {'action':4} {'price':>8} {'sd':>7}  note")
+if __name__ == "__main__":
+    force = "--refresh" in sys.argv[1:]
+    rows = screen(force=force)
+    md = render(rows)
+    # Dashboard data: table rows + downsampled band history per ticker.
+    charts = {}
     for r in rows:
-        print(f"{r['date']:10} {r['ticker']:6} {r['action']:4} {r['price']:>8} {r['sd_pos']:>7}  {r['note']}")
-    print("\nOpen positions vs current price (1 share per BUY assumed):")
-    pos = {}
-    for r in rows:
-        q = 1 if r["action"] == "BUY" else (-1 if r["action"] == "SELL" else 0)
-        p = pos.setdefault(r["ticker"], dict(qty=0, cost=0.0))
-        p["qty"] += q
-        p["cost"] += float(r["price"]) * q
-    for t, p in pos.items():
-        if p["qty"] <= 0:
+        if "pos" not in r:
             continue
         try:
-            _, closes, _ = fetch(t)
-            pnl = (closes[-1] - p["cost"] / p["qty"]) / (p["cost"] / p["qty"])
-            print(f"  {t}: {p['qty']} sh, avg {p['cost'] / p['qty']:.2f} -> {closes[-1]:.2f} ({pnl:+.1%})")
+            dates, closes, ohl = fetch(r["ticker"])
+            mid, _, low3, low4, _ = rolling_channel(closes)
+            charts[r["ticker"]] = chart_series(r["ticker"], dates, closes, ohl, mid, low3, low4)
         except Exception as e:
-            print(f"  {t}: price fetch failed ({e})")
-
-
-if __name__ == "__main__":
-    a = sys.argv[1:]
-    if "--show-paper" in a:
-        show_paper()
-    elif "--paper-buy" in a:
-        t = a[a.index("--paper-buy") + 1]
-        note = a[a.index("--note") + 1] if "--note" in a else ""
-        paper_log("BUY", t, note)
-    elif "--paper-sell" in a:
-        t = a[a.index("--paper-sell") + 1]
-        note = a[a.index("--note") + 1] if "--note" in a else ""
-        paper_log("SELL", t, note)
-    else:
-        force = "--refresh" in a
-        rows = screen(force=force)
-        md = render(rows)
-        with open("screener_latest.md", "w", encoding="utf-8") as f:
-            f.write(md)
-        # Dashboard data: table rows + downsampled band history per ticker.
-        charts = {}
-        for r in rows:
-            if "pos" not in r:
-                continue
-            try:
-                dates, closes, ohl = fetch(r["ticker"])
-                mid, _, low3, low4, _ = rolling_channel(closes)
-                charts[r["ticker"]] = chart_series(r["ticker"], dates, closes, ohl, mid, low3, low4)
-            except Exception as e:
-                print(f"  chart series skipped for {r['ticker']}: {e}", flush=True)
-        payload = json_safe({"asof": dt.date.today().isoformat(), "rows": rows, "charts": charts})
-        with open(DATA_JSON, "w", encoding="utf-8") as f:
-            # allow_nan=False turns any leftover NaN/Infinity into a loud failure instead of
-            # invalid JSON that every dashboard fails to parse.
-            json.dump(payload, f, allow_nan=False)
-        print(md)
-        print("Wrote screener_latest.md + screener_data.json", flush=True)
-        ledger_ensure()
+            print(f"  chart series skipped for {r['ticker']}: {e}", flush=True)
+    payload = json_safe({"asof": dt.date.today().isoformat(), "rows": rows, "charts": charts})
+    with open(DATA_JSON, "w", encoding="utf-8") as f:
+        # allow_nan=False turns any leftover NaN/Infinity into a loud failure instead of
+        # invalid JSON that every dashboard fails to parse.
+        json.dump(payload, f, allow_nan=False)
+    print(md)
+    print("Wrote screener_data.json", flush=True)
