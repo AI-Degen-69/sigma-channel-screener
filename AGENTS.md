@@ -13,6 +13,8 @@ pnpm lint        # oxlint (no config file, default rules)
 
 Python side (not npm): `python monthly_screener.py` writes `screener_data.json` (Python 3.10+, NumPy).
 
+Tests: `python -m pytest tests -q` from the repo root. pytest only, no config file; the suite covers `classify_channel` and the row integration in `screen()`.
+
 ## Hard rules
 
 **The dashboard is `index.html` + `src/`, served by Vite.** Preview it with `pnpm dev` on http://localhost:5173. Opening `index.html` as a plain file shows a blank page. There are no standalone HTML dashboards — do not add one.

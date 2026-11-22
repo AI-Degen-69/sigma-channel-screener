@@ -1,7 +1,0 @@
-Read tasks/ab-orchestrator/TASK.md in this repo and do it.
-
-Gate: `python -m pytest tasks/ab-orchestrator -q` must be green when run from the repo root.
-
-Do not touch the dashboard, do not add dependencies, do not commit.
-
-Report back: files changed, the pytest summary line, and anything you could not verify.

@@ -1,7 +1,6 @@
-"""Acceptance tests for tasks/ab-orchestrator/TASK.md.
+"""Acceptance tests for the channel decision in monthly_screener.py.
 
-Red until `classify_channel` exists and `screen()` attaches `signal` to each row.
-Run from the repo root: python -m pytest tasks/ab-orchestrator -q
+Run from the repo root: python -m pytest tests -q
 """
 import math
 import pathlib
